@@ -26,6 +26,16 @@ namespace recompinput {
         bool get_player_is_assigned(int player_index, bool temp_player = false);
         bool has_enough_players_assigned();
         InputDevice get_player_input_device(int player_index, bool temp_player = false);
+
+        // [wcw fix] Plug-and-play multiplayer: assign a newly detected controller to the first
+        // free player slot (a vacated slot first, else the next unassigned player) without
+        // requiring the assignment modal. No-op in single-player mode, while manual assignment
+        // is active, or if the controller is already assigned.
+        void auto_assign_controller(SDL_GameController* controller);
+        // [wcw fix] Clear a removed controller from any player slot holding it (the slot stays
+        // assigned and reads neutral; replugging auto-assigns back into the vacated slot).
+        // Without this the slot keeps a dangling SDL_GameController pointer.
+        void handle_controller_removed(SDL_GameController* controller);
     }
 
     namespace playerassignment {

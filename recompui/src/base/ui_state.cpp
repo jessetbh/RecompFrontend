@@ -659,6 +659,16 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
     if (!recompui::is_any_context_shown() && !ultramodern::is_game_started()) {
         recompui::show_context(recompui::get_launcher_context_id(), "");
     }
+    // [wcw] Hide the launcher once the game is running. WCW's minimal main.cpp boots the game
+    // directly (recomp::start_game) without going through the launcher UI, which normally calls
+    // hide_all_contexts() itself (ui_launcher.cpp on_start_game_mode). Without this, the block
+    // above auto-shows the launcher during the boot window (before is_game_started() flips) and
+    // the fullscreen launcher page then covers the game's output forever — the game renders
+    // fine underneath but the window stays black.
+    else if (ultramodern::is_game_started() && recompui::is_context_shown(recompui::get_launcher_context_id())) {
+        fprintf(stderr, "[wcw][ui] game started - hiding leftover launcher context\n");
+        recompui::hide_context(recompui::get_launcher_context_id());
+    }
 
     std::lock_guard lock{ ui_state_mutex };
 
@@ -838,6 +848,12 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
             }
 
             if (open_config) {
+                // [wcw] one-shot marker: confirms the esc/menu-button -> config path fired in-game.
+                static bool wcw_logged_open = false;
+                if (!wcw_logged_open) {
+                    wcw_logged_open = true;
+                    fprintf(stderr, "[wcw][ui] config menu opened (esc/menu button)\n");
+                }
                 recompui::config::open();
             }
         }

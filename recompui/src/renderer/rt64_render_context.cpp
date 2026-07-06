@@ -299,6 +299,8 @@ renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::Window
             app->userConfig.graphicsAPI = RT64::UserConfiguration::GraphicsAPI::Automatic;
             break;
     }
+    // [wcw] NOTE (2026-06-12 black-screen investigation): forcing the Vulkan backend here was
+    // tested and produced the SAME all-black game rendering as D3D12 — the defect is API-independent.
 
     // Set up the RT64 application.
     uint32_t thread_id = 0;

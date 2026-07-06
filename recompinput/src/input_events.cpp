@@ -2,6 +2,7 @@
 #include "recompinput/input_binding.h"
 #include "recompinput/input_events.h"
 #include "recompinput/profiles.h"
+#include "recompinput/players.h"
 #include "recompui/config.h"
 #include "ultramodern/ultramodern.hpp"
 
@@ -95,12 +96,20 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
                 profiles::add_controller(guid, profile_index);
             }
         }
+
+        // [wcw fix] Plug-and-play multiplayer: claim a player slot for the new pad (no-op in
+        // single-player mode or during manual assignment). Runs after the profile registration
+        // above so the pad's per-GUID profile resolves.
+        players::auto_assign_controller(controller);
     }
     break;
     case SDL_EventType::SDL_CONTROLLERDEVICEREMOVED:
     {
         SDL_ControllerDeviceEvent* controller_event = &event->cdevice;
         printf("Controller removed: %d\n", controller_event->which);
+        // [wcw fix] Clear the pad from any player slot before its state (and the underlying
+        // SDL_GameController) is destroyed, so the slot doesn't keep a dangling pointer.
+        players::handle_controller_removed(recompinput::get_controller_from_joystick_id(controller_event->which));
         recompinput::remove_controller_state(controller_event->which);
     }
     break;

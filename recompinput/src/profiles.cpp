@@ -343,6 +343,15 @@ namespace recompinput {
         // Set Player 1 to the SP profiles by default.
         profiles::set_input_profile_for_player(0, keyboard_sp_profile_index, recompinput::InputDevice::Keyboard);
         profiles::set_input_profile_for_player(0, controller_sp_profile_index, recompinput::InputDevice::Controller);
+
+        // [wcw fix] Unassigned players must have NO input profiles. players_input_profile_indices
+        // zero-initializes, and profile index 0 is the single-player KEYBOARD profile created
+        // above — so in multiplayer mode every unassigned player (2..4) would read the keyboard
+        // profile and mirror player 1's keyboard input. get_n64_input skips negative indices.
+        for (int i = 1; i < (int)recompinput::max_num_players_supported; i++) {
+            profiles::set_input_profile_for_player(i, -1, recompinput::InputDevice::Keyboard);
+            profiles::set_input_profile_for_player(i, -1, recompinput::InputDevice::Controller);
+        }
     }
 
     int profiles::get_sp_controller_profile_index() {
@@ -362,7 +371,22 @@ namespace recompinput {
                 InputDevice::Keyboard,
                 false
             );
-            clear_all_mappings(profile_index);
+            if (player_index == 0) {
+                // [wcw fix] Player 1's multiplayer keyboard profile starts as a copy of the
+                // single-player keyboard defaults instead of empty — otherwise assigning the
+                // keyboard to player 1 in the assignment modal silently kills all keyboard
+                // input until every key is manually rebound. Later players still start empty
+                // (two players sharing one physical keyboard can't share the same bindings).
+                for (GameInput input = GameInput::A; input < GameInput::COUNT; input = static_cast<GameInput>(static_cast<int>(input) + 1)) {
+                    for (size_t binding_index = 0; binding_index < recompinput::num_bindings_per_input; binding_index++) {
+                        profiles::set_input_binding(profile_index, input, binding_index,
+                            profiles::get_input_binding(keyboard_sp_profile_index, input, binding_index));
+                    }
+                }
+            }
+            else {
+                clear_all_mappings(profile_index);
+            }
         }
         return profile_index;
     }

@@ -129,6 +129,59 @@ InputDevice players::get_player_input_device(int player_index, bool temp_player)
     }
 }
 
+// [wcw fix] Plug-and-play multiplayer assignment (see players.h).
+void players::auto_assign_controller(SDL_GameController* controller) {
+    if (controller == nullptr || PlayerState.single_player_mode || PlayerState.is_assigning) {
+        return;
+    }
+
+    int free_slot = -1;
+    for (size_t i = 0; i < PlayerState.players.get_count(); i++) {
+        Player& player = PlayerState.players[i];
+        if (player.controller == controller) {
+            return; // already assigned
+        }
+        if (free_slot < 0 && player.controller == nullptr && !player.keyboard_enabled) {
+            free_slot = (int)i; // vacated slot (controller was unplugged)
+        }
+    }
+
+    if (free_slot >= 0) {
+        PlayerState.players[free_slot].controller = controller;
+        PlayerState.players[free_slot].button_pressed();
+    }
+    else if (PlayerState.players.get_count() < players::get_max_number_of_players()) {
+        PlayerState.players.add_controller_player(controller);
+        free_slot = (int)PlayerState.players.get_count() - 1;
+    }
+    else {
+        return; // all player slots taken
+    }
+
+    int cont_profile_index = profiles::get_controller_profile_index_from_sdl_controller(controller);
+    if (cont_profile_index >= 0) {
+        profiles::set_input_profile_for_player(free_slot, cont_profile_index, InputDevice::Controller);
+    }
+    printf("Auto-assigned controller to player %d\n", free_slot + 1);
+}
+
+// [wcw fix] See players.h.
+void players::handle_controller_removed(SDL_GameController* controller) {
+    if (controller == nullptr) {
+        return;
+    }
+    for (size_t i = 0; i < PlayerState.players.get_count(); i++) {
+        if (PlayerState.players[i].controller == controller) {
+            PlayerState.players[i].controller = nullptr;
+        }
+    }
+    for (size_t i = 0; i < PlayerState.temp_players.get_count(); i++) {
+        if (PlayerState.temp_players[i].controller == controller) {
+            PlayerState.temp_players[i].controller = nullptr;
+        }
+    }
+}
+
 // playerassignment start
 
 bool playerassignment::is_active() {

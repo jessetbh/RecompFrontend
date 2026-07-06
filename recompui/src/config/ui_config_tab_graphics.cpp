@@ -152,11 +152,12 @@ namespace recompui {
         }
 
         static std::string get_framerate_text(uint32_t refresh_rate) {
+            // [wcw fix] Framerate is LOCKED to Original for this game — see the lock below.
             return
                 "Sets the game's output framerate. This option does not affect gameplay."
                 "<br />"
                 "<br />"
-                "Note: If you have issues with <recomp-color primary>Display</recomp-color> mode while using an external frame limiter, use <recomp-color primary>Manual</recomp-color> mode instead and configure it to that same frame limit."
+                "<recomp-color warning>Locked to Original for this game:</recomp-color> frame interpolation warps geometry with this engine's display lists (it submits pre-multiplied matrices only, which defeats the renderer's motion matching)."
                 "<br />"
                 "<br />"
                 "<recomp-color primary>Detected display refresh rate: " + std::to_string(refresh_rate) + "hz</recomp-color>";
@@ -304,8 +305,27 @@ namespace recompui {
                 "Framerate",
                 get_framerate_text(60),
                 refresh_rate_options,
-                ultramodern::renderer::RefreshRate::Display
+                // [wcw fix] Default Original, not Display. WCW builds one visual frame from
+                // MULTIPLE RSP workloads, but RT64's frame matching assumes 1 workload = 1 frame
+                // (rt64_workload_queue.cpp TODO), so interpolated frames re-render only a slice
+                // of the frame — pure-black / partially-drawn presents (verified via swapchain
+                // readback: constant black bursts in menus at Display, zero at Original).
+                ultramodern::renderer::RefreshRate::Original
             );
+            {
+                // [wcw fix] LOCK the framerate to Original (2026-07-05 decision). The black-frame
+                // flicker WAS fixed once (multi-workload frame grouping + present-fb interpolation
+                // target — preserved in git history at commit bd35fac and lib-patches there), but
+                // the interpolated frames still warp geometry badly: WCW is G_FORCEMTX-only, so
+                // RT64's heuristic transform matching lerps between mispaired full MVPs
+                // ("polygons bounce all over"). Until game-side matrix-group patches exist, the
+                // control is disabled in the UI and any saved config value (graphics.json AND its
+                // .bak) is coerced back to Original at parse time.
+                config.update_option_disabled(graphics::options::rr_option, true);
+                config.on_json_parse_option(graphics::options::rr_option, [](const nlohmann::json &) {
+                    return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
+                });
+            }
 
             config.add_number_option(
                 graphics::options::rr_manual_value,
