@@ -159,6 +159,11 @@ bool controller_button_state(int controller_num, int32_t input_id) {
 }
 
 static std::atomic_bool right_analog_suppressed = false;
+// [wcw freecam]
+static std::atomic_bool keyboard_suppressed = false;
+static std::atomic_bool mouse_capture = false;
+static float raw_mouse_delta[2] = { 0.0f, 0.0f };
+static int32_t raw_mouse_wheel = 0;
 
 float controller_axis_state(int controller_num, int32_t input_id, bool allow_suppression) {
     if (abs(input_id) - 1 < SDL_GameControllerAxis::SDL_CONTROLLER_AXIS_MAX) {
@@ -218,6 +223,9 @@ bool recompinput::should_override_keystate(SDL_Scancode key, SDL_Keymod mod) {
 float recompinput::get_input_analog(int controller_num, const InputField& field) {
     switch (field.input_type) {
     case InputType::Keyboard:
+        if (keyboard_suppressed.load()) {
+            return 0.0f;
+        }
         if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
             if (should_override_keystate(static_cast<SDL_Scancode>(field.input_id), InputState.keymod)) {
                 return 0.0f;
@@ -248,6 +256,9 @@ float recompinput::get_input_analog(int controller_num, const std::span<const In
 bool recompinput::get_input_digital(int controller_num, const InputField& field) {
     switch (field.input_type) {
     case InputType::Keyboard:
+        if (keyboard_suppressed.load()) {
+            return false;
+        }
         if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
             if (should_override_keystate(static_cast<SDL_Scancode>(field.input_id), InputState.keymod)) {
                 return false;
@@ -358,6 +369,28 @@ void recompinput::get_right_analog(int controller_num, float* x, float* y) {
     apply_joystick_deadzone(x_val, y_val, x, y);
 }
 
+void recompinput::set_keyboard_suppressed(bool suppressed) {
+    keyboard_suppressed.store(suppressed);
+}
+
+void recompinput::set_mouse_capture_requested(bool requested) {
+    mouse_capture.store(requested);
+}
+
+bool recompinput::mouse_capture_requested() {
+    return mouse_capture.load();
+}
+
+void recompinput::take_raw_mouse_motion(float* delta_x, float* delta_y, int32_t* wheel) {
+    std::lock_guard lock{ InputState.pending_input_mutex };
+    *delta_x = raw_mouse_delta[0];
+    *delta_y = raw_mouse_delta[1];
+    *wheel = raw_mouse_wheel;
+    raw_mouse_delta[0] = 0.0f;
+    raw_mouse_delta[1] = 0.0f;
+    raw_mouse_wheel = 0;
+}
+
 void recompinput::set_right_analog_suppressed(bool suppressed) {
     right_analog_suppressed.store(suppressed);
 }
@@ -410,7 +443,13 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
     std::lock_guard lock{ InputState.pending_input_mutex };
     InputState.pending_mouse_delta[0] += delta_x;
     InputState.pending_mouse_delta[1] += delta_y;
+    raw_mouse_delta[0] += delta_x;
+    raw_mouse_delta[1] += delta_y;
 }
 void recompinput::add_mouse_wheel_delta(int32_t delta) {
     InputState.mouse_wheel_pos.fetch_add(delta);
+    if (!recompinput::game_input_disabled()) {
+        std::lock_guard lock{ InputState.pending_input_mutex };
+        raw_mouse_wheel += delta;
+    }
 }

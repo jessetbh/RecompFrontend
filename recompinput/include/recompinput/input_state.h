@@ -40,6 +40,14 @@ namespace recompinput {
     void get_right_analog(int controller_num, float* x, float* y);
     void apply_joystick_deadzone(float x_in, float y_in, float* x_out, float* y_out);
     void set_right_analog_suppressed(bool suppressed);
+    // [wcw freecam] For mods that take over the keyboard and mouse (AkiMods camera):
+    // keyboard bindings stop reaching the game; the cursor is locked to the window (relative
+    // mouse) while game input is enabled; raw mouse motion and wheel, unscaled and only while
+    // game input is enabled, are accumulated until taken.
+    void set_keyboard_suppressed(bool suppressed);
+    void set_mouse_capture_requested(bool requested);
+    bool mouse_capture_requested();
+    void take_raw_mouse_motion(float* delta_x, float* delta_y, int32_t* wheel);
     bool game_input_disabled();
     bool all_input_disabled();
     ControllerState &get_controller_state(SDL_JoystickID joystick_id);
