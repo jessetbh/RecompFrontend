@@ -3,6 +3,7 @@
 #include "recompui/renderer.h"
 #include "util/steam_deck.h"
 #include "render/rt64_crt_filter.h"
+#include "render/rt64_hdr_output.h"
 #include "render/rt64_wcw_raytracer.h"
 
 static bool created_graphics_config = false;
@@ -123,6 +124,17 @@ namespace recompui {
         static EnumOptionVector crt_colors_options = {
             {CrtColorsOption::USA, "USA", "USA"},
             {CrtColorsOption::Japan, "Japan", "Japan"},
+        };
+
+        // [wcw hdr] HDR output.
+        enum class HdrOption {
+            Off = 0,
+            On = 1
+        };
+
+        static EnumOptionVector hdr_options = {
+            {HdrOption::Off, "Off", "Off"},
+            {HdrOption::On, "On", "On"},
         };
 
         enum class CrtBeamOption {
@@ -275,6 +287,8 @@ namespace recompui {
             crt_settings.parameters.emplace_back("TNTC", crt_japan ? 1.0f : 0.0f);
             crt_settings.beamSimulator = get_graphics_enum_value<CrtBeamOption>(graphics::options::crt_beam_option) == CrtBeamOption::On;
             RT64::CrtFilter::setUserSettings(crt_settings);
+
+            graphics::apply_hdr_settings();
         }
 
         void graphics::update_msaa_supported(bool supported) {
@@ -297,6 +311,19 @@ namespace recompui {
                     config.update_enum_option_disabled(graphics::options::msaa_option, static_cast<uint32_t>(ultramodern::renderer::Antialiasing::MSAA4X), true);
                 }
             }
+        }
+
+        // [wcw hdr] On/off takes effect when the renderer next creates its swap chain (a restart);
+        // the paper white brightness applies immediately.
+        void graphics::apply_hdr_settings() {
+            if (!created_graphics_config) {
+                return;
+            }
+
+            RT64::HdrOutput::Settings hdr_settings;
+            hdr_settings.enabled = get_graphics_enum_value<HdrOption>(graphics::options::hdr_option) == HdrOption::On;
+            hdr_settings.paperWhiteNits = float(get_graphics_number_value<int>(graphics::options::hdr_paper_white));
+            RT64::HdrOutput::setUserSettings(hdr_settings);
         }
 
         void graphics::update_refresh_rate(uint32_t refresh_rate) {
@@ -474,6 +501,31 @@ namespace recompui {
                 ultramodern::renderer::HighPrecisionFramebuffer::Off,
                 true
             );
+
+            config.add_enum_option(
+                graphics::options::hdr_option,
+                "HDR",
+                "Outputs in HDR on displays with Windows HDR turned on. The CRT filter's phosphor masks can then run at full strength."
+                "<br />"
+                "<br />"
+                "<recomp-color primary>Takes effect after restarting the game.</recomp-color> Has no effect when Windows HDR is off for the display.",
+                hdr_options,
+                HdrOption::Off
+            );
+
+            config.add_number_option(
+                graphics::options::hdr_paper_white,
+                "HDR Paper White",
+                "Brightness of white in the game picture and menus with HDR on, in nits. 200 is a typical starting point; raise it in a bright room.",
+                80, 400, 10, 0, false, 200
+            );
+            {
+                config.add_option_hidden_dependency(
+                    graphics::options::hdr_paper_white,
+                    graphics::options::hdr_option,
+                    HdrOption::Off
+                );
+            }
 
             config.add_enum_option(
                 graphics::options::crt_filter_option,

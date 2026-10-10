@@ -270,6 +270,9 @@ renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::Window
     RT64::ApplicationConfiguration appConfig;
     appConfig.useConfigurationFile = false;
 
+    // [wcw hdr] The swap chain's format depends on the saved HDR setting.
+    recompui::config::graphics::apply_hdr_settings();
+
     // Create the RT64 application.
     app = std::make_unique<RT64::Application>(appCore, appConfig);
 

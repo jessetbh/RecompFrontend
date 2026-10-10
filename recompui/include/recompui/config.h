@@ -69,11 +69,16 @@ namespace recompui {
                 inline const std::string crt_signal_option = "crt_signal_option";
                 inline const std::string crt_colors_option = "crt_colors_option";
                 inline const std::string crt_beam_option = "crt_beam_option";
+                // [wcw hdr] HDR output (RT64 HdrOutput).
+                inline const std::string hdr_option = "hdr_option";
+                inline const std::string hdr_paper_white = "hdr_paper_white";
             }
     
             void update_msaa_supported(bool supported);
             void update_refresh_rate(uint32_t refresh_rate);
             void toggle_fullscreen();
+            // [wcw hdr] Hands the saved HDR settings to RT64; called before the renderer creates its swap chain.
+            void apply_hdr_settings();
         }
 
         namespace sound {

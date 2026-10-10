@@ -10,6 +10,7 @@
 
 #include "rt64_render_hooks.h"
 #include "rt64_texture_cache.h"
+#include "render/rt64_hdr_output.h"
 
 #include "RmlUi/Core/RenderInterfaceCompatibility.h"
 
@@ -19,17 +20,20 @@
 #include "InterfaceVS.hlsl.spirv.h"
 // TODO: Forced game includes
 #include "InterfacePS.hlsl.spirv.h"
+#include "InterfaceHdrPS.hlsl.spirv.h"
 
 #ifdef _WIN32
 // TODO: Forced game includes
 #   include "InterfaceVS.hlsl.dxil.h"
 // TODO: Forced game includes
 #   include "InterfacePS.hlsl.dxil.h"
+#   include "InterfaceHdrPS.hlsl.dxil.h"
 #elif defined(__APPLE__)
 // TODO: Forced game includes
 #   include "InterfaceVS.hlsl.metal.h"
 // TODO: Forced game includes
 #   include "InterfacePS.hlsl.metal.h"
+#   include "InterfaceHdrPS.hlsl.metal.h"
 #endif
 
 #ifdef _WIN32
@@ -64,6 +68,13 @@ void CalculateTextureRowWidthPadding(uint32_t rowPitch, uint32_t &rowWidth, uint
 struct RmlPushConstants {
     Rml::Matrix4f transform;
     Rml::Vector2f translation;
+};
+
+// [wcw hdr] Push constants of the HDR composite (InterfaceHdrPS): the vertex part plus the paper white scale.
+struct RmlHdrPushConstants {
+    Rml::Matrix4f transform;
+    Rml::Vector2f translation;
+    float hdrScale;
 };
 
 struct TextureHandle {
@@ -138,6 +149,11 @@ class RmlRenderInterface_RT64_impl : public Rml::RenderInterfaceCompatibility {
     std::unique_ptr<plume::RenderPipelineLayout> layout_{};
     std::unique_ptr<plume::RenderPipeline> pipeline_{};
     std::unique_ptr<plume::RenderPipeline> pipeline_ms_{};
+    // [wcw hdr] UI composite into an scRGB swap chain.
+    std::unique_ptr<plume::RenderShader> hdr_pixel_shader_{};
+    std::unique_ptr<plume::RenderPipelineLayout> hdr_layout_{};
+    std::unique_ptr<plume::RenderPipeline> hdr_pipeline_{};
+    bool offscreen_ = false;
     std::unique_ptr<plume::RenderTexture> screen_texture_ms_{};
     std::unique_ptr<plume::RenderTexture> screen_texture_{};
     std::unique_ptr<plume::RenderFramebuffer> screen_framebuffer_{};
@@ -200,6 +216,7 @@ public:
 
         vertex_shader_ = device_->createShader(GET_SHADER_BLOB(InterfaceVS, shaderFormat), GET_SHADER_SIZE(InterfaceVS, shaderFormat), "VSMain", shaderFormat);
         pixel_shader_ = device_->createShader(GET_SHADER_BLOB(InterfacePS, shaderFormat), GET_SHADER_SIZE(InterfacePS, shaderFormat), "PSMain", shaderFormat);
+        hdr_pixel_shader_ = device_->createShader(GET_SHADER_BLOB(InterfaceHdrPS, shaderFormat), GET_SHADER_SIZE(InterfaceHdrPS, shaderFormat), "PSMain", shaderFormat);
 
 
         // Create the descriptor set that contains the sampler
@@ -226,6 +243,15 @@ public:
         layout_builder.addDescriptorSet(*texture_set_builder_);
         layout_builder.end();
         layout_ = layout_builder.create(device_);
+
+        // [wcw hdr] Same sets, with the push constants visible to the HDR composite's pixel shader too.
+        plume::RenderPipelineLayoutBuilder hdr_layout_builder{};
+        hdr_layout_builder.begin(false, true);
+        hdr_layout_builder.addPushConstant(0, 0, sizeof(RmlHdrPushConstants), plume::RenderShaderStageFlag::VERTEX | plume::RenderShaderStageFlag::PIXEL);
+        hdr_layout_builder.addDescriptorSet(sampler_set_builder);
+        hdr_layout_builder.addDescriptorSet(*texture_set_builder_);
+        hdr_layout_builder.end();
+        hdr_layout_ = hdr_layout_builder.create(device_);
 
         // Create the pipeline description
         plume::RenderGraphicsPipelineDesc pipeline_desc{};
@@ -256,10 +282,22 @@ public:
 
         pipeline_ = device_->createGraphicsPipeline(pipeline_desc);
 
+        // [wcw hdr] UI composite into an scRGB (R16G16B16A16_FLOAT) swap chain.
+        {
+            plume::RenderGraphicsPipelineDesc hdr_desc = pipeline_desc;
+            hdr_desc.renderTargetFormat[0] = plume::RenderFormat::R16G16B16A16_FLOAT;
+            hdr_desc.pipelineLayout = hdr_layout_.get();
+            hdr_desc.pixelShader = hdr_pixel_shader_.get();
+            hdr_pipeline_ = device_->createGraphicsPipeline(hdr_desc);
+        }
+
         if (multisampling_.sampleCount > 1) {
             pipeline_desc.multisampling = multisampling_;
             pipeline_ms_ = device_->createGraphicsPipeline(pipeline_desc);
+        }
 
+        // The screen drawer composites the offscreen UI (MSAA, or HDR) into the swap chain.
+        {
             // Create the descriptor set for the screen drawer.
             plume::RenderDescriptorRange screen_descriptor_range(plume::RenderDescriptorRangeType::TEXTURE, 2, 1);
             screen_descriptor_set_ = device_->createDescriptorSet(plume::RenderDescriptorSetDesc(&screen_descriptor_range, 1));
@@ -585,21 +623,31 @@ public:
     void start(plume::RenderCommandList* list, int image_width, int image_height) {
         list_ = list;
 
-        if (multisampling_.sampleCount > 1) {
-            if (window_width_ != image_width || window_height_ != image_height) {
+        // The UI renders offscreen (in sRGB) and is composited into the swap chain with MSAA, and
+        // with an scRGB swap chain ([wcw hdr]) where it's converted to linear light.
+        const bool msaa = (multisampling_.sampleCount > 1);
+        const bool offscreen = msaa || RT64::HdrOutput::active();
+        if (offscreen) {
+            if (window_width_ != image_width || window_height_ != image_height || !offscreen_ || (screen_texture_ == nullptr)) {
                 screen_framebuffer_.reset();
                 screen_texture_ = device_->createTexture(plume::RenderTextureDesc::ColorTarget(image_width, image_height, SwapChainFormat));
-                screen_texture_ms_ = device_->createTexture(plume::RenderTextureDesc::ColorTarget(image_width, image_height, SwapChainFormat, multisampling_));
-                const plume::RenderTexture *color_attachment = screen_texture_ms_.get();
+                const plume::RenderTexture *color_attachment = screen_texture_.get();
+                if (msaa) {
+                    screen_texture_ms_ = device_->createTexture(plume::RenderTextureDesc::ColorTarget(image_width, image_height, SwapChainFormat, multisampling_));
+                    color_attachment = screen_texture_ms_.get();
+                }
+
                 screen_framebuffer_ = device_->createFramebuffer(plume::RenderFramebufferDesc(&color_attachment, 1));
                 screen_descriptor_set_->setTexture(0, screen_texture_.get(), plume::RenderTextureLayout::SHADER_READ);
             }
 
-            list_->setPipeline(pipeline_ms_.get());
+            list_->setPipeline(msaa ? pipeline_ms_.get() : pipeline_.get());
         }
         else {
             list_->setPipeline(pipeline_.get());
         }
+
+        offscreen_ = offscreen;
 
         list_->setGraphicsPipelineLayout(layout_.get());
         // Bind the set for descriptors that don't change across draws
@@ -620,37 +668,43 @@ public:
         reset_dynamic_buffer(vertex_buffer_);
         reset_dynamic_buffer(index_buffer_);
 
-        // Set an internal texture as the render target if MSAA is enabled.
-        if (multisampling_.sampleCount > 1) {
-            list->barriers(plume::RenderBarrierStage::GRAPHICS, plume::RenderTextureBarrier(screen_texture_ms_.get(), plume::RenderTextureLayout::COLOR_WRITE));
+        // Set an internal texture as the render target if the UI renders offscreen.
+        if (offscreen_) {
+            plume::RenderTexture *target = msaa ? screen_texture_ms_.get() : screen_texture_.get();
+            list->barriers(plume::RenderBarrierStage::GRAPHICS, plume::RenderTextureBarrier(target, plume::RenderTextureLayout::COLOR_WRITE));
             list->setFramebuffer(screen_framebuffer_.get());
             list->clearColor(0, plume::RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
         }
     }
 
     void end(plume::RenderCommandList* list, plume::RenderFramebuffer* framebuffer) {
-        // Draw the texture were rendered the UI in to the swap chain framebuffer if MSAA is enabled.
-        if (multisampling_.sampleCount > 1) {
-            plume::RenderTextureBarrier before_resolve_barriers[] = {
-                plume::RenderTextureBarrier(screen_texture_ms_.get(), plume::RenderTextureLayout::RESOLVE_SOURCE),
-                plume::RenderTextureBarrier(screen_texture_.get(), plume::RenderTextureLayout::RESOLVE_DEST)
-            };
+        // Draw the texture the UI was rendered in to the swap chain framebuffer if it rendered offscreen.
+        if (offscreen_) {
+            if (multisampling_.sampleCount > 1) {
+                plume::RenderTextureBarrier before_resolve_barriers[] = {
+                    plume::RenderTextureBarrier(screen_texture_ms_.get(), plume::RenderTextureLayout::RESOLVE_SOURCE),
+                    plume::RenderTextureBarrier(screen_texture_.get(), plume::RenderTextureLayout::RESOLVE_DEST)
+                };
 
-            list->barriers(plume::RenderBarrierStage::COPY, before_resolve_barriers, uint32_t(std::size(before_resolve_barriers)));
-            list->resolveTexture(screen_texture_.get(), screen_texture_ms_.get());
+                list->barriers(plume::RenderBarrierStage::COPY, before_resolve_barriers, uint32_t(std::size(before_resolve_barriers)));
+                list->resolveTexture(screen_texture_.get(), screen_texture_ms_.get());
+            }
+
             list->barriers(plume::RenderBarrierStage::GRAPHICS, plume::RenderTextureBarrier(screen_texture_.get(), plume::RenderTextureLayout::SHADER_READ));
             list->setFramebuffer(framebuffer);
-            list->setPipeline(pipeline_.get());
-            list->setGraphicsPipelineLayout(layout_.get());
+            const bool hdr = RT64::HdrOutput::active();
+            list->setPipeline(hdr ? hdr_pipeline_.get() : pipeline_.get());
+            list->setGraphicsPipelineLayout(hdr ? hdr_layout_.get() : layout_.get());
             list->setGraphicsDescriptorSet(sampler_set_.get(), 0);
             list->setGraphicsDescriptorSet(screen_descriptor_set_.get(), 1);
             list->setScissors(plume::RenderRect{ 0, 0, window_width_, window_height_ });
             plume::RenderVertexBufferView vertex_view(screen_vertex_buffer_.get(), screen_vertex_buffer_size_);
             list->setVertexBuffers(0, &vertex_view, 1, &vertex_slot_);
 
-            RmlPushConstants constants{
+            RmlHdrPushConstants constants{
                 .transform = Rml::Matrix4f::Identity(),
-                .translation = Rml::Vector2f(0.0f, 0.0f)
+                .translation = Rml::Vector2f(0.0f, 0.0f),
+                .hdrScale = RT64::HdrOutput::sdrScale()
             };
 
             list_->setGraphicsPushConstants(0, &constants);

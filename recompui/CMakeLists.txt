@@ -98,6 +98,7 @@ target_include_directories(recompui PUBLIC
 
 build_vertex_shader(recompui "shaders/InterfaceVS.hlsl" "shaders/InterfaceVS.hlsl")
 build_pixel_shader(recompui "shaders/InterfacePS.hlsl" "shaders/InterfacePS.hlsl")
+build_pixel_shader(recompui "shaders/InterfaceHdrPS.hlsl" "shaders/InterfaceHdrPS.hlsl")
 
 target_include_directories(recompui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include/recompui")
 
