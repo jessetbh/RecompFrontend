@@ -182,6 +182,9 @@ namespace recompui {
             return {
                 {ultramodern::renderer::RefreshRate::Original, "Original", "30 (Original)"},
                 {ultramodern::renderer::RefreshRate::Manual, "Manual", std::to_string(smooth_rate) + " (Smooth)"},
+                // [wcw hfr] Experiment: twice the smooth rate. Stored under its own key and carried in the
+                // Display slot (which these games never offer as such), applied as Manual at that rate.
+                {ultramodern::renderer::RefreshRate::Display, "Smooth2x", std::to_string(smooth_rate * 2) + " (Experimental)"},
             };
         }
 
@@ -189,7 +192,9 @@ namespace recompui {
             return "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
                 "Sets the framerate. <recomp-color primary>30 (Original)</recomp-color> runs the game as it shipped. "
                 "<recomp-color primary>" + std::to_string(smooth_rate) + " (Smooth)</recomp-color> generates in-between frames "
-                "(frame interpolation): motion is smoother while the game itself, and your input, still update 30 times a second."
+                "(frame interpolation): motion is smoother while the game itself, and your input, still update 30 times a second. "
+                "<recomp-color primary>" + std::to_string(smooth_rate * 2) + " (Experimental)</recomp-color> generates three in-between frames; "
+                "it needs a " + std::to_string(smooth_rate * 2) + " Hz (or faster) display."
                 "<br /><br /><recomp-color primary>Note: rendering more frames costs more GPU time; with ray tracing on, "
                 "each generated frame is ray traced too.</recomp-color>";
         }
@@ -290,11 +295,15 @@ namespace recompui {
             // [wcw hfr] Only Original or the game's fixed smooth rate (stored as Manual); Display is never offered.
             {
                 const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
-                if ((smooth_rate == 0) || (new_config.rr_option != ultramodern::renderer::RefreshRate::Manual)) {
+                if (smooth_rate == 0) {
                     new_config.rr_option = ultramodern::renderer::RefreshRate::Original;
                 }
-
-                if (new_config.rr_option == ultramodern::renderer::RefreshRate::Manual) {
+                else if (new_config.rr_option == ultramodern::renderer::RefreshRate::Display) {
+                    // The experimental doubled smooth rate (see smooth_rate_options).
+                    new_config.rr_option = ultramodern::renderer::RefreshRate::Manual;
+                    new_config.rr_manual_value = int(smooth_rate * 2);
+                }
+                else if (new_config.rr_option == ultramodern::renderer::RefreshRate::Manual) {
                     new_config.rr_manual_value = int(smooth_rate);
                 }
             }
@@ -520,6 +529,9 @@ namespace recompui {
                         (j.is_number() && (j.get<uint32_t>() == static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual)));
                     if (manual && (smooth_rate > 0)) {
                         return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual);
+                    }
+                    if (j.is_string() && (j.get<std::string>() == "Smooth2x") && (smooth_rate > 0)) {
+                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Display);
                     }
                     return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
                 });
