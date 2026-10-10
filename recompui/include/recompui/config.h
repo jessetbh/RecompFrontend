@@ -71,7 +71,7 @@ namespace recompui {
                 inline const std::string crt_beam_option = "crt_beam_option";
                 // [wcw hdr] HDR output (RT64 HdrOutput).
                 inline const std::string hdr_option = "hdr_option";
-                inline const std::string hdr_paper_white = "hdr_paper_white";
+                inline const std::string hdr_brightness = "hdr_brightness";
             }
     
             void update_msaa_supported(bool supported);

@@ -322,7 +322,7 @@ namespace recompui {
 
             RT64::HdrOutput::Settings hdr_settings;
             hdr_settings.enabled = get_graphics_enum_value<HdrOption>(graphics::options::hdr_option) == HdrOption::On;
-            hdr_settings.paperWhiteNits = float(get_graphics_number_value<int>(graphics::options::hdr_paper_white));
+            hdr_settings.brightness = float(get_graphics_number_value<int>(graphics::options::hdr_brightness)) / 100.0f;
             RT64::HdrOutput::setUserSettings(hdr_settings);
         }
 
@@ -505,7 +505,7 @@ namespace recompui {
             config.add_enum_option(
                 graphics::options::hdr_option,
                 "HDR",
-                "Outputs in HDR on displays with Windows HDR turned on. The CRT filter's phosphor masks can then run at full strength."
+                "Outputs in HDR on displays with Windows HDR turned on. The CRT filter uses the extra brightness for a stronger, more authentic phosphor mask."
                 "<br />"
                 "<br />"
                 "<recomp-color primary>Takes effect after restarting the game.</recomp-color> Has no effect when Windows HDR is off for the display.",
@@ -514,14 +514,14 @@ namespace recompui {
             );
 
             config.add_number_option(
-                graphics::options::hdr_paper_white,
-                "HDR Paper White",
-                "Brightness of white in the game picture and menus with HDR on, in nits. 200 is a typical starting point; raise it in a bright room.",
-                80, 400, 10, 0, false, 200
+                graphics::options::hdr_brightness,
+                "HDR Brightness",
+                "Brightness of the game and menus with HDR on. 100% matches Windows' SDR content brightness setting, so the game looks as bright as your desktop.",
+                50, 150, 5, 0, true, 100
             );
             {
                 config.add_option_hidden_dependency(
-                    graphics::options::hdr_paper_white,
+                    graphics::options::hdr_brightness,
                     graphics::options::hdr_option,
                     HdrOption::Off
                 );
