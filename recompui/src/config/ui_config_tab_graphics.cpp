@@ -2,6 +2,7 @@
 #include "recompui/config.h"
 #include "recompui/renderer.h"
 #include "util/steam_deck.h"
+#include "render/rt64_wcw_raytracer.h"
 
 static bool created_graphics_config = false;
 
@@ -62,6 +63,29 @@ namespace recompui {
         #ifdef ALLOW_METAL
             {ultramodern::renderer::GraphicsApi::Metal, "Metal"},
         #endif
+        };
+
+        // [wcw rt] Experimental hybrid ray tracing.
+        enum class RayTracingOption {
+            Off = 0,
+            On = 1
+        };
+
+        enum class RayTracingQuality {
+            Performance = 0,
+            Balanced = 1,
+            Quality = 2
+        };
+
+        static EnumOptionVector ray_tracing_options = {
+            {RayTracingOption::Off, "Off", "Off"},
+            {RayTracingOption::On, "On", "On"},
+        };
+
+        static EnumOptionVector ray_tracing_quality_options = {
+            {RayTracingQuality::Performance, "Performance", "Performance"},
+            {RayTracingQuality::Balanced, "Balanced", "Balanced"},
+            {RayTracingQuality::Quality, "Quality", "Quality"},
         };
 
         static EnumOptionVector aspect_ratio_options = {
@@ -179,6 +203,11 @@ namespace recompui {
             new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
 
             ultramodern::renderer::set_graphics_config(new_config);
+
+            // [wcw rt] Takes effect on the next frame (no renderer restart needed).
+            RT64::WcwRaytracer::setUserSettings(
+                get_graphics_enum_value<RayTracingOption>(graphics::options::rt_option) == RayTracingOption::On,
+                uint32_t(get_graphics_enum_value<RayTracingQuality>(graphics::options::rt_quality_option)));
         }
 
         void graphics::update_msaa_supported(bool supported) {
@@ -378,6 +407,32 @@ namespace recompui {
                 ultramodern::renderer::HighPrecisionFramebuffer::Off,
                 true
             );
+
+            config.add_enum_option(
+                graphics::options::rt_option,
+                "Ray Tracing",
+                "<recomp-color warning>Experimental.</recomp-color> Adds ray-traced shadows from the arena lights and contact shadows, replacing the game's blob shadows."
+                "<br />"
+                "<br />"
+                "<recomp-color primary>Requires an RTX-class GPU with DirectX Raytracing 1.1 and the D3D12 graphics API.</recomp-color> It has no effect otherwise.",
+                ray_tracing_options,
+                RayTracingOption::Off
+            );
+
+            config.add_enum_option(
+                graphics::options::rt_quality_option,
+                "Ray Tracing Quality",
+                "<recomp-color primary>Performance</recomp-color> traces at half resolution with fewer rays. <recomp-color primary>Balanced</recomp-color> traces at half resolution. <recomp-color primary>Quality</recomp-color> traces at full resolution and costs the most.",
+                ray_tracing_quality_options,
+                RayTracingQuality::Balanced
+            );
+            {
+                config.add_option_hidden_dependency(
+                    graphics::options::rt_quality_option,
+                    graphics::options::rt_option,
+                    RayTracingOption::Off
+                );
+            }
 
             return config;
         }
