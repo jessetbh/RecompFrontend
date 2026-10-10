@@ -287,11 +287,11 @@ namespace recompui {
             new_config.hpfb_option = get_graphics_enum_value<ultramodern::renderer::HighPrecisionFramebuffer>(graphics::options::hpfb_option);
             new_config.rr_manual_value = get_graphics_number_value<int>(graphics::options::rr_manual_value);
 
-            // [wcw hfr] The smooth rate is fixed per game; Display is never offered.
+            // [wcw hfr] Only Original or the game's fixed smooth rate (stored as Manual); Display is never offered.
             {
                 const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
-                if ((smooth_rate == 0) || (new_config.rr_option == ultramodern::renderer::RefreshRate::Display)) {
-                    new_config.rr_option = (smooth_rate == 0) ? ultramodern::renderer::RefreshRate::Original : ultramodern::renderer::RefreshRate::Manual;
+                if ((smooth_rate == 0) || (new_config.rr_option != ultramodern::renderer::RefreshRate::Manual)) {
+                    new_config.rr_option = ultramodern::renderer::RefreshRate::Original;
                 }
 
                 if (new_config.rr_option == ultramodern::renderer::RefreshRate::Manual) {
@@ -511,13 +511,17 @@ namespace recompui {
                     config.update_option_disabled(graphics::options::rr_option, true);
                 }
 
-                // Saved Display/Manual values map to the smooth rate when the game has one, else to Original.
+                // Only a saved Smooth choice (stored as Manual) survives, and only when the game has a smooth
+                // rate. Everything else loads as Original, including Display: older builds coerced the option
+                // to Original at load without rewriting the file, so a stale Display must not turn on
+                // interpolation by itself.
                 config.on_json_parse_option(graphics::options::rr_option, [smooth_rate](const nlohmann::json &j) -> recomp::config::ConfigValueVariant {
-                    const bool original = j.is_string() ? (j.get<std::string>() == "Original") : (j.is_number() && (j.get<uint32_t>() == 0));
-                    if (original || (smooth_rate == 0)) {
-                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
+                    const bool manual = j.is_string() ? (j.get<std::string>() == "Manual") :
+                        (j.is_number() && (j.get<uint32_t>() == static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual)));
+                    if (manual && (smooth_rate > 0)) {
+                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual);
                     }
-                    return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual);
+                    return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
                 });
             }
 
