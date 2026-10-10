@@ -186,7 +186,8 @@ namespace recompui {
         }
 
         static std::string smooth_rate_description(uint32_t smooth_rate) {
-            return "Sets the framerate. <recomp-color primary>30 (Original)</recomp-color> runs the game as it shipped. "
+            return "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
+                "Sets the framerate. <recomp-color primary>30 (Original)</recomp-color> runs the game as it shipped. "
                 "<recomp-color primary>" + std::to_string(smooth_rate) + " (Smooth)</recomp-color> generates in-between frames "
                 "(frame interpolation): motion is smoother while the game itself, and your input, still update 30 times a second."
                 "<br /><br /><recomp-color primary>Note: rendering more frames costs more GPU time; with ray tracing on, "
@@ -356,6 +357,7 @@ namespace recompui {
         }
 
         static const std::string hdr_description =
+            "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
             "Outputs in HDR on displays with Windows HDR turned on. The CRT filter uses the extra brightness for a stronger, more authentic phosphor mask."
             "<br />"
             "<br />"
@@ -481,7 +483,7 @@ namespace recompui {
             static EnumOptionVector framerate_options = (smooth_rate > 0) ? smooth_rate_options(smooth_rate) : refresh_rate_options;
             config.add_enum_option(
                 graphics::options::rr_option,
-                "Framerate",
+                (smooth_rate > 0) ? "Framerate (Experimental)" : "Framerate",
                 (smooth_rate > 0) ? smooth_rate_description(smooth_rate) : get_framerate_text(60),
                 framerate_options,
                 ultramodern::renderer::RefreshRate::Original
@@ -494,12 +496,20 @@ namespace recompui {
                 20.0, 240.0, 1.0, 0, false, 60.0
             );
             {
-                config.add_option_hidden_dependency(
-                    graphics::options::rr_manual_value,
-                    graphics::options::rr_option,
-                    ultramodern::renderer::RefreshRate::Original,
-                    ultramodern::renderer::RefreshRate::Display
-                );
+                if (smooth_rate > 0) {
+                    // The rate box never applies: the smooth rate is fixed per game. (A hidden dependency
+                    // would show it again whenever the option is Manual.)
+                    config.update_option_hidden(graphics::options::rr_manual_value, true);
+                }
+                else {
+                    config.add_option_hidden_dependency(
+                        graphics::options::rr_manual_value,
+                        graphics::options::rr_option,
+                        ultramodern::renderer::RefreshRate::Original,
+                        ultramodern::renderer::RefreshRate::Display
+                    );
+                    config.update_option_disabled(graphics::options::rr_option, true);
+                }
 
                 // Saved Display/Manual values map to the smooth rate when the game has one, else to Original.
                 config.on_json_parse_option(graphics::options::rr_option, [smooth_rate](const nlohmann::json &j) -> recomp::config::ConfigValueVariant {
@@ -509,14 +519,6 @@ namespace recompui {
                     }
                     return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual);
                 });
-
-                if (smooth_rate > 0) {
-                    // The rate box never applies: the smooth rate is fixed per game.
-                    config.update_option_hidden(graphics::options::rr_manual_value, true);
-                }
-                else {
-                    config.update_option_disabled(graphics::options::rr_option, true);
-                }
             }
 
             config.add_enum_option(
@@ -558,7 +560,7 @@ namespace recompui {
 
             config.add_enum_option(
                 graphics::options::hdr_option,
-                "HDR",
+                "HDR (Experimental)",
                 hdr_description,
                 hdr_options,
                 HdrOption::Off
@@ -580,7 +582,8 @@ namespace recompui {
 
             config.add_enum_option(
                 graphics::options::crt_filter_option,
-                "CRT Filter",
+                "CRT Filter (Experimental)",
+                "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
                 "Simulates a period CRT television: the video signal, scanlines, phosphor mask and glow. "
                 "Looks best at higher window resolutions."
                 "<br />"
@@ -610,7 +613,8 @@ namespace recompui {
             );
             config.add_enum_option(
                 graphics::options::crt_beam_option,
-                "CRT Beam Simulator",
+                "CRT Beam Simulator (Experimental)",
+                "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
                 "Simulates the CRT's rolling scan for CRT-like motion clarity (Blur Busters CRT Beam Simulator)."
                 "<br />"
                 "<br />"
@@ -640,8 +644,9 @@ namespace recompui {
 
             config.add_enum_option(
                 graphics::options::rt_option,
-                "Ray Tracing",
-                "<recomp-color warning>Experimental.</recomp-color> Adds ray-traced shadows from the arena lights and contact shadows, replacing the game's blob shadows."
+                "Ray Tracing (Experimental)",
+                "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
+                "Adds ray-traced shadows from the arena lights and contact shadows, replacing the game's blob shadows."
                 "<br />"
                 "<br />"
                 "<recomp-color primary>Requires an RTX-class GPU with DirectX Raytracing 1.1 and the D3D12 graphics API.</recomp-color> It has no effect otherwise.",
