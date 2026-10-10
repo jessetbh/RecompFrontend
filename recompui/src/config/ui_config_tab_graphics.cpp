@@ -326,6 +326,25 @@ namespace recompui {
             RT64::HdrOutput::setUserSettings(hdr_settings);
         }
 
+        static const std::string hdr_description =
+            "Outputs in HDR on displays with Windows HDR turned on. The CRT filter uses the extra brightness for a stronger, more authentic phosphor mask."
+            "<br />"
+            "<br />"
+            "<recomp-color primary>Takes effect after restarting the game.</recomp-color>";
+
+        void graphics::update_hdr_status(bool requested, bool active) {
+            std::string status;
+            if (active) {
+                status = "<br /><br /><recomp-color success>HDR is active.</recomp-color>";
+            }
+            else if (requested) {
+                status = "<br /><br /><recomp-color warning>Windows HDR is off for this display, so the game is using SDR.</recomp-color> "
+                    "Turn on \"Use HDR\" in Windows display settings, then restart the game.";
+            }
+
+            get_graphics_config().update_option_description(graphics::options::hdr_option, hdr_description + status);
+        }
+
         void graphics::update_refresh_rate(uint32_t refresh_rate) {
             recomp::config::Config& config = get_graphics_config();
             std::string framerate_text = get_framerate_text(refresh_rate);
@@ -505,10 +524,7 @@ namespace recompui {
             config.add_enum_option(
                 graphics::options::hdr_option,
                 "HDR",
-                "Outputs in HDR on displays with Windows HDR turned on. The CRT filter uses the extra brightness for a stronger, more authentic phosphor mask."
-                "<br />"
-                "<br />"
-                "<recomp-color primary>Takes effect after restarting the game.</recomp-color> Has no effect when Windows HDR is off for the display.",
+                hdr_description,
                 hdr_options,
                 HdrOption::Off
             );

@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include "hle/rt64_application.h"
+#include "render/rt64_hdr_output.h"
 #include "rt64_render_hooks.h"
 #include "overloaded.h"
 
@@ -336,6 +337,7 @@ renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::Window
     }
 
     recompui::config::graphics::update_msaa_supported(sample_positions_supported);
+    recompui::config::graphics::update_hdr_status(RT64::HdrOutput::userSettings().enabled, RT64::HdrOutput::active());
 
     high_precision_fb_enabled = app->shaderLibrary->usesHDR;
 }

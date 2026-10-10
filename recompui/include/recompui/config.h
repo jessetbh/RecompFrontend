@@ -79,6 +79,8 @@ namespace recompui {
             void toggle_fullscreen();
             // [wcw hdr] Hands the saved HDR settings to RT64; called before the renderer creates its swap chain.
             void apply_hdr_settings();
+            // [wcw hdr] Shows in the HDR option whether HDR output actually started.
+            void update_hdr_status(bool requested, bool active);
         }
 
         namespace sound {
