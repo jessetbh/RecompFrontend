@@ -1,6 +1,7 @@
 #include "librecomp/config.hpp"
 #include "recompui/config.h"
 #include "recompui/renderer.h"
+#include "recompui/program_config.h"
 #include "util/steam_deck.h"
 #include "render/rt64_crt_filter.h"
 #include "render/rt64_hdr_output.h"
@@ -176,6 +177,22 @@ namespace recompui {
             {ultramodern::renderer::RefreshRate::Manual, "Manual"},
         };
 
+        // [wcw hfr] With frame interpolation: Original and the game's smooth rate (stored as Manual at that rate).
+        static EnumOptionVector smooth_rate_options(uint32_t smooth_rate) {
+            return {
+                {ultramodern::renderer::RefreshRate::Original, "Original", "30 (Original)"},
+                {ultramodern::renderer::RefreshRate::Manual, "Manual", std::to_string(smooth_rate) + " (Smooth)"},
+            };
+        }
+
+        static std::string smooth_rate_description(uint32_t smooth_rate) {
+            return "Sets the framerate. <recomp-color primary>30 (Original)</recomp-color> runs the game as it shipped. "
+                "<recomp-color primary>" + std::to_string(smooth_rate) + " (Smooth)</recomp-color> generates in-between frames "
+                "(frame interpolation): motion is smoother while the game itself, and your input, still update 30 times a second."
+                "<br /><br /><recomp-color primary>Note: rendering more frames costs more GPU time; with ray tracing on, "
+                "each generated frame is ray traced too.</recomp-color>";
+        }
+
         static EnumOptionVector hpfb_options = {
             {ultramodern::renderer::HighPrecisionFramebuffer::Auto, "Auto"},
             {ultramodern::renderer::HighPrecisionFramebuffer::On, "On"},
@@ -269,6 +286,18 @@ namespace recompui {
             new_config.hpfb_option = get_graphics_enum_value<ultramodern::renderer::HighPrecisionFramebuffer>(graphics::options::hpfb_option);
             new_config.rr_manual_value = get_graphics_number_value<int>(graphics::options::rr_manual_value);
 
+            // [wcw hfr] The smooth rate is fixed per game; Display is never offered.
+            {
+                const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
+                if ((smooth_rate == 0) || (new_config.rr_option == ultramodern::renderer::RefreshRate::Display)) {
+                    new_config.rr_option = (smooth_rate == 0) ? ultramodern::renderer::RefreshRate::Original : ultramodern::renderer::RefreshRate::Manual;
+                }
+
+                if (new_config.rr_option == ultramodern::renderer::RefreshRate::Manual) {
+                    new_config.rr_manual_value = int(smooth_rate);
+                }
+            }
+
             new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
 
             ultramodern::renderer::set_graphics_config(new_config);
@@ -348,8 +377,11 @@ namespace recompui {
         void graphics::update_refresh_rate(uint32_t refresh_rate) {
             recomp::config::Config& config = get_graphics_config();
             std::string framerate_text = get_framerate_text(refresh_rate);
-            config.update_option_description(graphics::options::rr_option, framerate_text);
-            config.update_option_description(graphics::options::rr_manual_value, framerate_text);
+            // [wcw hfr] The smooth-rate option describes itself; only the locked option shows the display rate.
+            if (recompui::programconfig::get_frame_interpolation().smooth_rate == 0) {
+                config.update_option_description(graphics::options::rr_option, framerate_text);
+                config.update_option_description(graphics::options::rr_manual_value, framerate_text);
+            }
         }
 
         void graphics::toggle_fullscreen() {
@@ -442,13 +474,17 @@ namespace recompui {
                 wm_default()
             );
 
+            // [wcw hfr] Framerate: games that declare frame interpolation (programconfig::set_frame_interpolation)
+            // offer "30 (Original)" / "<rate> (Smooth)", defaulting to Original. Games that don't stay locked to
+            // Original: these engines submit only combined matrices, which RT64 can't interpolate on its own.
+            const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
+            static EnumOptionVector framerate_options = (smooth_rate > 0) ? smooth_rate_options(smooth_rate) : refresh_rate_options;
             config.add_enum_option(
                 graphics::options::rr_option,
                 "Framerate",
-                get_framerate_text(60),
-                refresh_rate_options,
-                // [wcw fix] Default to the display rate: 60Hz frame interpolation works for this game.
-                ultramodern::renderer::RefreshRate::Display
+                (smooth_rate > 0) ? smooth_rate_description(smooth_rate) : get_framerate_text(60),
+                framerate_options,
+                ultramodern::renderer::RefreshRate::Original
             );
 
             config.add_number_option(
@@ -464,6 +500,23 @@ namespace recompui {
                     ultramodern::renderer::RefreshRate::Original,
                     ultramodern::renderer::RefreshRate::Display
                 );
+
+                // Saved Display/Manual values map to the smooth rate when the game has one, else to Original.
+                config.on_json_parse_option(graphics::options::rr_option, [smooth_rate](const nlohmann::json &j) -> recomp::config::ConfigValueVariant {
+                    const bool original = j.is_string() ? (j.get<std::string>() == "Original") : (j.is_number() && (j.get<uint32_t>() == 0));
+                    if (original || (smooth_rate == 0)) {
+                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
+                    }
+                    return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual);
+                });
+
+                if (smooth_rate > 0) {
+                    // The rate box never applies: the smooth rate is fixed per game.
+                    config.update_option_hidden(graphics::options::rr_manual_value, true);
+                }
+                else {
+                    config.update_option_disabled(graphics::options::rr_option, true);
+                }
             }
 
             config.add_enum_option(
