@@ -75,10 +75,13 @@ namespace recompui {
             On = 1
         };
 
+        // Matches RT64::WcwLogic::RtQuality. Ambient occlusion comes with the level (none on Performance, Subtle on
+        // Balanced, Strong on Quality and Ultra), so there is no separate AO option.
         enum class RayTracingQuality {
             Performance = 0,
             Balanced = 1,
-            Quality = 2
+            Quality = 2,
+            Ultra = 3
         };
 
         static EnumOptionVector ray_tracing_options = {
@@ -86,23 +89,11 @@ namespace recompui {
             {RayTracingOption::On, "On", "On"},
         };
 
-        // Matches RT64::WcwLogic::AoLevel.
-        enum class AmbientOcclusionOption {
-            Off = 0,
-            Subtle = 1,
-            Strong = 2
-        };
-
-        static EnumOptionVector ambient_occlusion_options = {
-            {AmbientOcclusionOption::Off, "Off", "Off"},
-            {AmbientOcclusionOption::Subtle, "Subtle", "Subtle"},
-            {AmbientOcclusionOption::Strong, "Strong", "Strong"},
-        };
-
         static EnumOptionVector ray_tracing_quality_options = {
             {RayTracingQuality::Performance, "Performance", "Performance"},
             {RayTracingQuality::Balanced, "Balanced", "Balanced"},
             {RayTracingQuality::Quality, "Quality", "Quality"},
+            {RayTracingQuality::Ultra, "Ultra", "Ultra"},
         };
 
         // [wcw crt] CRT filter: on/off, the video signal (a preset in crt/presets/ next to the
@@ -317,8 +308,7 @@ namespace recompui {
             // [wcw rt] Takes effect on the next frame (no renderer restart needed).
             RT64::WcwRaytracer::setUserSettings(
                 get_graphics_enum_value<RayTracingOption>(graphics::options::rt_option) == RayTracingOption::On,
-                uint32_t(get_graphics_enum_value<RayTracingQuality>(graphics::options::rt_quality_option)),
-                uint32_t(get_graphics_enum_value<AmbientOcclusionOption>(graphics::options::rt_ao_option)));
+                uint32_t(get_graphics_enum_value<RayTracingQuality>(graphics::options::rt_quality_option)));
 
             // [wcw crt] Takes effect on the next frame; the first use of a preset compiles its shaders.
             RT64::CrtFilter::Settings crt_settings;
@@ -670,28 +660,18 @@ namespace recompui {
             config.add_enum_option(
                 graphics::options::rt_quality_option,
                 "Ray Tracing Quality",
-                "<recomp-color primary>Performance</recomp-color> traces at half resolution with fewer rays. <recomp-color primary>Balanced</recomp-color> traces at half resolution. <recomp-color primary>Quality</recomp-color> traces at full resolution and costs the most.",
+                "<recomp-color primary>Performance</recomp-color> traces at reduced resolution with the fewest rays and skips ambient occlusion. "
+                "<recomp-color primary>Balanced</recomp-color> traces at reduced resolution and adds soft ambient occlusion where surfaces meet "
+                "(under arms, between the legs, where wrestlers touch the mat). "
+                "<recomp-color primary>Quality</recomp-color> traces every pixel for sharper shadows and deeper ambient occlusion. "
+                "<recomp-color primary>Ultra</recomp-color> keeps Quality's look with twice the rays, for the cleanest result; "
+                "it costs the most and suits fast GPUs.",
                 ray_tracing_quality_options,
                 RayTracingQuality::Balanced
-            );
-            config.add_enum_option(
-                graphics::options::rt_ao_option,
-                "Ambient Occlusion",
-                "Ray-traced ambient occlusion: soft shading where surfaces meet or crowd each other "
-                "(under arms and chins, between the legs, where wrestlers touch the mat and ropes). "
-                "<recomp-color primary>Subtle</recomp-color> keeps it light. <recomp-color primary>Strong</recomp-color> "
-                "makes it more visible and traces more rays.",
-                ambient_occlusion_options,
-                AmbientOcclusionOption::Subtle
             );
             {
                 config.add_option_hidden_dependency(
                     graphics::options::rt_quality_option,
-                    graphics::options::rt_option,
-                    RayTracingOption::Off
-                );
-                config.add_option_hidden_dependency(
-                    graphics::options::rt_ao_option,
                     graphics::options::rt_option,
                     RayTracingOption::Off
                 );
