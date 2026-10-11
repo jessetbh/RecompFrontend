@@ -76,7 +76,7 @@ namespace recompui {
         };
 
         // Matches RT64::WcwLogic::RtQuality. Ambient occlusion comes with the level (none on Performance, Subtle on
-        // Balanced and Quality, Strong on Ultra), so there is no separate AO option.
+        // Balanced, Strong on Quality and Ultra), so there is no separate AO option.
         enum class RayTracingQuality {
             Performance = 0,
             Balanced = 1,
@@ -663,8 +663,8 @@ namespace recompui {
                 "<recomp-color primary>Performance</recomp-color> traces at reduced resolution with the fewest rays and skips ambient occlusion. "
                 "<recomp-color primary>Balanced</recomp-color> traces at reduced resolution and adds soft ambient occlusion where surfaces meet "
                 "(under arms, between the legs, where wrestlers touch the mat). "
-                "<recomp-color primary>Quality</recomp-color> traces every pixel for sharper shadows. "
-                "<recomp-color primary>Ultra</recomp-color> traces every pixel with several times the rays and deeper ambient occlusion; "
+                "<recomp-color primary>Quality</recomp-color> traces every pixel for sharper shadows and deeper ambient occlusion. "
+                "<recomp-color primary>Ultra</recomp-color> keeps Quality's look with twice the rays, for the cleanest result; "
                 "it costs the most and suits fast GPUs.",
                 ray_tracing_quality_options,
                 RayTracingQuality::Balanced
