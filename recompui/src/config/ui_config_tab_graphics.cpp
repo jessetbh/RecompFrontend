@@ -634,7 +634,9 @@ namespace recompui {
                 "Simulates the CRT's rolling scan for CRT-like motion clarity (Blur Busters CRT Beam Simulator)."
                 "<br />"
                 "<br />"
-                "<recomp-color primary>Requires a 120 Hz or faster display running at a multiple of 60 Hz, with V-Sync on.</recomp-color> "
+                "<recomp-color primary>Requires the CRT Filter, V-Sync and a 120 Hz or faster display.</recomp-color> "
+                "At higher framerates the simulated CRT refreshes at the framerate when the display is at least twice as fast "
+                "(e.g. 120 fps on a 240 Hz+ display). "
                 "Works best at 240 Hz and up, and on OLED. Not recommended with variable refresh rate (G-Sync/FreeSync) "
                 "or local dimming. It has no effect otherwise.",
                 crt_beam_options,
