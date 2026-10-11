@@ -1,6 +1,7 @@
 #include "librecomp/config.hpp"
 #include "recompui/config.h"
 #include "recompui/renderer.h"
+#include "recompui/program_config.h"
 #include "util/steam_deck.h"
 #include "render/rt64_crt_filter.h"
 #include "render/rt64_hdr_output.h"
@@ -176,6 +177,28 @@ namespace recompui {
             {ultramodern::renderer::RefreshRate::Manual, "Manual"},
         };
 
+        // [wcw hfr] With frame interpolation: Original and the game's smooth rate (stored as Manual at that rate).
+        static EnumOptionVector smooth_rate_options(uint32_t smooth_rate) {
+            return {
+                {ultramodern::renderer::RefreshRate::Original, "Original", "30 (Original)"},
+                {ultramodern::renderer::RefreshRate::Manual, "Manual", std::to_string(smooth_rate) + " (Smooth)"},
+                // [wcw hfr] Experiment: twice the smooth rate. Stored under its own key and carried in the
+                // Display slot (which these games never offer as such), applied as Manual at that rate.
+                {ultramodern::renderer::RefreshRate::Display, "Smooth2x", std::to_string(smooth_rate * 2) + " (Experimental)"},
+            };
+        }
+
+        static std::string smooth_rate_description(uint32_t smooth_rate) {
+            return "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
+                "Sets the framerate. <recomp-color primary>30 (Original)</recomp-color> runs the game as it shipped. "
+                "<recomp-color primary>" + std::to_string(smooth_rate) + " (Smooth)</recomp-color> generates in-between frames "
+                "(frame interpolation): motion is smoother while the game itself, and your input, still update 30 times a second. "
+                "<recomp-color primary>" + std::to_string(smooth_rate * 2) + " (Experimental)</recomp-color> generates three in-between frames; "
+                "it needs a " + std::to_string(smooth_rate * 2) + " Hz (or faster) display."
+                "<br /><br /><recomp-color primary>Note: rendering more frames costs more GPU time; with ray tracing on, "
+                "each generated frame is ray traced too.</recomp-color>";
+        }
+
         static EnumOptionVector hpfb_options = {
             {ultramodern::renderer::HighPrecisionFramebuffer::Auto, "Auto"},
             {ultramodern::renderer::HighPrecisionFramebuffer::On, "On"},
@@ -269,6 +292,22 @@ namespace recompui {
             new_config.hpfb_option = get_graphics_enum_value<ultramodern::renderer::HighPrecisionFramebuffer>(graphics::options::hpfb_option);
             new_config.rr_manual_value = get_graphics_number_value<int>(graphics::options::rr_manual_value);
 
+            // [wcw hfr] Only Original or the game's fixed smooth rate (stored as Manual); Display is never offered.
+            {
+                const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
+                if (smooth_rate == 0) {
+                    new_config.rr_option = ultramodern::renderer::RefreshRate::Original;
+                }
+                else if (new_config.rr_option == ultramodern::renderer::RefreshRate::Display) {
+                    // The experimental doubled smooth rate (see smooth_rate_options).
+                    new_config.rr_option = ultramodern::renderer::RefreshRate::Manual;
+                    new_config.rr_manual_value = int(smooth_rate * 2);
+                }
+                else if (new_config.rr_option == ultramodern::renderer::RefreshRate::Manual) {
+                    new_config.rr_manual_value = int(smooth_rate);
+                }
+            }
+
             new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
 
             ultramodern::renderer::set_graphics_config(new_config);
@@ -327,6 +366,7 @@ namespace recompui {
         }
 
         static const std::string hdr_description =
+            "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
             "Outputs in HDR on displays with Windows HDR turned on. The CRT filter uses the extra brightness for a stronger, more authentic phosphor mask."
             "<br />"
             "<br />"
@@ -348,8 +388,11 @@ namespace recompui {
         void graphics::update_refresh_rate(uint32_t refresh_rate) {
             recomp::config::Config& config = get_graphics_config();
             std::string framerate_text = get_framerate_text(refresh_rate);
-            config.update_option_description(graphics::options::rr_option, framerate_text);
-            config.update_option_description(graphics::options::rr_manual_value, framerate_text);
+            // [wcw hfr] The smooth-rate option describes itself; only the locked option shows the display rate.
+            if (recompui::programconfig::get_frame_interpolation().smooth_rate == 0) {
+                config.update_option_description(graphics::options::rr_option, framerate_text);
+                config.update_option_description(graphics::options::rr_manual_value, framerate_text);
+            }
         }
 
         void graphics::toggle_fullscreen() {
@@ -442,32 +485,18 @@ namespace recompui {
                 wm_default()
             );
 
+            // [wcw hfr] Framerate: games that declare frame interpolation (programconfig::set_frame_interpolation)
+            // offer "30 (Original)" / "<rate> (Smooth)", defaulting to Original. Games that don't stay locked to
+            // Original: these engines submit only combined matrices, which RT64 can't interpolate on its own.
+            const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
+            static EnumOptionVector framerate_options = (smooth_rate > 0) ? smooth_rate_options(smooth_rate) : refresh_rate_options;
             config.add_enum_option(
                 graphics::options::rr_option,
-                "Framerate",
-                get_framerate_text(60),
-                refresh_rate_options,
-                // [wcw fix] Default Original, not Display. WCW builds one visual frame from
-                // MULTIPLE RSP workloads, but RT64's frame matching assumes 1 workload = 1 frame
-                // (rt64_workload_queue.cpp TODO), so interpolated frames re-render only a slice
-                // of the frame — pure-black / partially-drawn presents (verified via swapchain
-                // readback: constant black bursts in menus at Display, zero at Original).
+                (smooth_rate > 0) ? "Framerate (Experimental)" : "Framerate",
+                (smooth_rate > 0) ? smooth_rate_description(smooth_rate) : get_framerate_text(60),
+                framerate_options,
                 ultramodern::renderer::RefreshRate::Original
             );
-            {
-                // [wcw fix] LOCK the framerate to Original (2026-07-05 decision). The black-frame
-                // flicker WAS fixed once (multi-workload frame grouping + present-fb interpolation
-                // target — preserved in git history at commit bd35fac and lib-patches there), but
-                // the interpolated frames still warp geometry badly: WCW is G_FORCEMTX-only, so
-                // RT64's heuristic transform matching lerps between mispaired full MVPs
-                // ("polygons bounce all over"). Until game-side matrix-group patches exist, the
-                // control is disabled in the UI and any saved config value (graphics.json AND its
-                // .bak) is coerced back to Original at parse time.
-                config.update_option_disabled(graphics::options::rr_option, true);
-                config.on_json_parse_option(graphics::options::rr_option, [](const nlohmann::json &) {
-                    return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
-                });
-            }
 
             config.add_number_option(
                 graphics::options::rr_manual_value,
@@ -476,12 +505,36 @@ namespace recompui {
                 20.0, 240.0, 1.0, 0, false, 60.0
             );
             {
-                config.add_option_hidden_dependency(
-                    graphics::options::rr_manual_value,
-                    graphics::options::rr_option,
-                    ultramodern::renderer::RefreshRate::Original,
-                    ultramodern::renderer::RefreshRate::Display
-                );
+                if (smooth_rate > 0) {
+                    // The rate box never applies: the smooth rate is fixed per game. (A hidden dependency
+                    // would show it again whenever the option is Manual.)
+                    config.update_option_hidden(graphics::options::rr_manual_value, true);
+                }
+                else {
+                    config.add_option_hidden_dependency(
+                        graphics::options::rr_manual_value,
+                        graphics::options::rr_option,
+                        ultramodern::renderer::RefreshRate::Original,
+                        ultramodern::renderer::RefreshRate::Display
+                    );
+                    config.update_option_disabled(graphics::options::rr_option, true);
+                }
+
+                // Only a saved Smooth choice (stored as Manual) survives, and only when the game has a smooth
+                // rate. Everything else loads as Original, including Display: older builds coerced the option
+                // to Original at load without rewriting the file, so a stale Display must not turn on
+                // interpolation by itself.
+                config.on_json_parse_option(graphics::options::rr_option, [smooth_rate](const nlohmann::json &j) -> recomp::config::ConfigValueVariant {
+                    const bool manual = j.is_string() ? (j.get<std::string>() == "Manual") :
+                        (j.is_number() && (j.get<uint32_t>() == static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual)));
+                    if (manual && (smooth_rate > 0)) {
+                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual);
+                    }
+                    if (j.is_string() && (j.get<std::string>() == "Smooth2x") && (smooth_rate > 0)) {
+                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Display);
+                    }
+                    return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
+                });
             }
 
             config.add_enum_option(
@@ -523,7 +576,7 @@ namespace recompui {
 
             config.add_enum_option(
                 graphics::options::hdr_option,
-                "HDR",
+                "HDR (Experimental)",
                 hdr_description,
                 hdr_options,
                 HdrOption::Off
@@ -545,7 +598,8 @@ namespace recompui {
 
             config.add_enum_option(
                 graphics::options::crt_filter_option,
-                "CRT Filter",
+                "CRT Filter (Experimental)",
+                "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
                 "Simulates a period CRT television: the video signal, scanlines, phosphor mask and glow. "
                 "Looks best at higher window resolutions."
                 "<br />"
@@ -575,11 +629,14 @@ namespace recompui {
             );
             config.add_enum_option(
                 graphics::options::crt_beam_option,
-                "CRT Beam Simulator",
+                "CRT Beam Simulator (Experimental)",
+                "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
                 "Simulates the CRT's rolling scan for CRT-like motion clarity (Blur Busters CRT Beam Simulator)."
                 "<br />"
                 "<br />"
-                "<recomp-color primary>Requires a 120 Hz or faster display running at a multiple of 60 Hz, with V-Sync on.</recomp-color> "
+                "<recomp-color primary>Requires the CRT Filter, V-Sync and a 120 Hz or faster display.</recomp-color> "
+                "At higher framerates the simulated CRT refreshes at the framerate when the display is at least twice as fast "
+                "(e.g. 120 fps on a 240 Hz+ display). "
                 "Works best at 240 Hz and up, and on OLED. Not recommended with variable refresh rate (G-Sync/FreeSync) "
                 "or local dimming. It has no effect otherwise.",
                 crt_beam_options,
@@ -605,8 +662,9 @@ namespace recompui {
 
             config.add_enum_option(
                 graphics::options::rt_option,
-                "Ray Tracing",
-                "<recomp-color warning>Experimental.</recomp-color> Adds ray-traced shadows from the arena lights and contact shadows, replacing the game's blob shadows."
+                "Ray Tracing (Experimental)",
+                "<recomp-color warning>Experimental:</recomp-color> still being tuned, so expect rough edges. "
+                "Adds ray-traced shadows from the arena lights and contact shadows, replacing the game's blob shadows."
                 "<br />"
                 "<br />"
                 "<recomp-color primary>Requires an RTX-class GPU with DirectX Raytracing 1.1 and the D3D12 graphics API.</recomp-color> It has no effect otherwise.",
