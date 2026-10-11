@@ -680,9 +680,9 @@ namespace recompui {
                 "Ray-traced ambient occlusion: soft shading where surfaces meet or crowd each other "
                 "(under arms and chins, between the legs, where wrestlers touch the mat and ropes). "
                 "<recomp-color primary>Subtle</recomp-color> keeps it light. <recomp-color primary>Strong</recomp-color> "
-                "makes it clearly visible and traces more rays.",
+                "makes it more visible and traces more rays.",
                 ambient_occlusion_options,
-                AmbientOcclusionOption::Strong
+                AmbientOcclusionOption::Subtle
             );
             {
                 config.add_option_hidden_dependency(
