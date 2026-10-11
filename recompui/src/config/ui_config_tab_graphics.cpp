@@ -2,6 +2,7 @@
 #include "recompui/config.h"
 #include "recompui/renderer.h"
 #include "recompui/program_config.h"
+#include "framerate_rules.h"
 #include "util/steam_deck.h"
 #include "render/rt64_crt_filter.h"
 #include "render/rt64_hdr_output.h"
@@ -292,21 +293,9 @@ namespace recompui {
             new_config.hpfb_option = get_graphics_enum_value<ultramodern::renderer::HighPrecisionFramebuffer>(graphics::options::hpfb_option);
             new_config.rr_manual_value = get_graphics_number_value<int>(graphics::options::rr_manual_value);
 
-            // [wcw hfr] Only Original or the game's fixed smooth rate (stored as Manual); Display is never offered.
-            {
-                const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
-                if (smooth_rate == 0) {
-                    new_config.rr_option = ultramodern::renderer::RefreshRate::Original;
-                }
-                else if (new_config.rr_option == ultramodern::renderer::RefreshRate::Display) {
-                    // The experimental doubled smooth rate (see smooth_rate_options).
-                    new_config.rr_option = ultramodern::renderer::RefreshRate::Manual;
-                    new_config.rr_manual_value = int(smooth_rate * 2);
-                }
-                else if (new_config.rr_option == ultramodern::renderer::RefreshRate::Manual) {
-                    new_config.rr_manual_value = int(smooth_rate);
-                }
-            }
+            // [wcw hfr] Only Original, the game's fixed smooth rate or twice it (framerate_rules.h).
+            recompui::framerate::apply_choice(new_config.rr_option, new_config.rr_manual_value,
+                recompui::programconfig::get_frame_interpolation().smooth_rate);
 
             new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
 
@@ -525,15 +514,7 @@ namespace recompui {
                 // to Original at load without rewriting the file, so a stale Display must not turn on
                 // interpolation by itself.
                 config.on_json_parse_option(graphics::options::rr_option, [smooth_rate](const nlohmann::json &j) -> recomp::config::ConfigValueVariant {
-                    const bool manual = j.is_string() ? (j.get<std::string>() == "Manual") :
-                        (j.is_number() && (j.get<uint32_t>() == static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual)));
-                    if (manual && (smooth_rate > 0)) {
-                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Manual);
-                    }
-                    if (j.is_string() && (j.get<std::string>() == "Smooth2x") && (smooth_rate > 0)) {
-                        return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Display);
-                    }
-                    return static_cast<uint32_t>(ultramodern::renderer::RefreshRate::Original);
+                    return static_cast<uint32_t>(recompui::framerate::parse_saved_option(j, smooth_rate));
                 });
             }
 

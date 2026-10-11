@@ -122,3 +122,30 @@ target_link_libraries(recompui PUBLIC
     lunasvg
     miniz
 )
+
+# [wcw] Unit tests for the Framerate option's rules (tests/). They build and run as part of every recompui build, so a
+# failing test fails the game's build. RECOMPUI_WCW_TESTS=OFF skips them.
+option(RECOMPUI_WCW_TESTS "Build and run the wcw unit tests with recompui" ON)
+if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
+    add_executable(recompui_wcw_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/framerate_rules_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/framerate_rules.cpp
+    )
+    target_include_directories(recompui_wcw_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${RECOMP_FRONTEND_N64MODERNRUNTIME_PATH}/ultramodern/include
+        ${RECOMP_FRONTEND_N64MODERNRUNTIME_PATH}/thirdparty
+    )
+    set(RECOMPUI_WCW_TESTS_STAMP "${CMAKE_CURRENT_BINARY_DIR}/recompui_wcw_tests.passed")
+    add_custom_command(
+        OUTPUT "${RECOMPUI_WCW_TESTS_STAMP}"
+        COMMAND recompui_wcw_tests
+        COMMAND ${CMAKE_COMMAND} -E touch "${RECOMPUI_WCW_TESTS_STAMP}"
+        DEPENDS recompui_wcw_tests
+        COMMENT "Running recompui wcw unit tests"
+        VERBATIM
+    )
+    add_custom_target(recompui_wcw_tests_run DEPENDS "${RECOMPUI_WCW_TESTS_STAMP}")
+    add_dependencies(recompui recompui_wcw_tests_run)
+endif()
