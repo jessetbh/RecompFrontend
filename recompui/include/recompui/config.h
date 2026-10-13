@@ -71,7 +71,8 @@ namespace recompui {
                 inline const std::string crt_beam_option = "crt_beam_option";
                 // [wcw hdr] HDR output (RT64 HdrOutput).
                 inline const std::string hdr_option = "hdr_option";
-                inline const std::string hdr_brightness = "hdr_brightness";
+                inline const std::string hdr_picture = "hdr_picture";
+                inline const std::string hdr_custom_nits = "hdr_custom_nits";
             }
     
             void update_msaa_supported(bool supported);
@@ -79,7 +80,8 @@ namespace recompui {
             void toggle_fullscreen();
             // [wcw hdr] Hands the saved HDR settings to RT64; called before the renderer creates its swap chain.
             void apply_hdr_settings();
-            // [wcw hdr] Shows in the HDR option whether HDR output actually started.
+            // [wcw hdr] Shows in the HDR option whether HDR output actually started, and in HDR Picture the
+            // display's figures and what the choice gives.
             void update_hdr_status(bool requested, bool active);
         }
 
