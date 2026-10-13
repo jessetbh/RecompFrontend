@@ -8,6 +8,11 @@
 #include "render/rt64_hdr_output.h"
 #include "render/rt64_wcw_raytracer.h"
 
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <thread>
+
 static bool created_graphics_config = false;
 
 namespace recompui {
@@ -301,6 +306,61 @@ namespace recompui {
                 "<recomp-color primary>Detected display refresh rate: " + std::to_string(refresh_rate) + "hz</recomp-color>";
         }
 
+        // [wcw] WCW_SETTINGS_STRESS=<ms>: test harness for crashes on applying settings. Every <ms> it switches the
+        // renderer between two sets of settings through the same calls as Apply (the owner's crash: fullscreen, 60 fps,
+        // Expand, CRT on, RT Quality <-> windowed, 120 fps, 4:3, CRT off, RT Balanced). WCW_SETTINGS_STRESS_MASK picks
+        // what changes (default 31): 1 window mode, 2 framerate, 4 aspect ratio, 8 CRT filter, 16 RT quality, 32 MSAA,
+        // 64 resolution. Off by default; never saves the config.
+        static void start_settings_stress() {
+            const char *period_env = getenv("WCW_SETTINGS_STRESS");
+            if (period_env == nullptr) {
+                return;
+            }
+
+            const int period_ms = std::max(atoi(period_env), 100);
+            const char *mask_env = getenv("WCW_SETTINGS_STRESS_MASK");
+            const uint32_t mask = (mask_env != nullptr) ? uint32_t(atoi(mask_env)) : 31u;
+            const ultramodern::renderer::GraphicsConfig base = ultramodern::renderer::get_graphics_config();
+            const RT64::CrtFilter::Settings crt_base = RT64::CrtFilter::userSettings();
+            const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
+            fprintf(stderr, "[wcw stress] switching settings every %d ms, mask %u\n", period_ms, mask);
+            std::thread([=]() {
+                for (uint64_t n = 1;; n++) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(period_ms));
+                    const bool b = (n % 2) == 1;
+                    ultramodern::renderer::GraphicsConfig config = base;
+                    if (mask & 1) {
+                        config.wm_option = b ? ultramodern::renderer::WindowMode::Windowed : ultramodern::renderer::WindowMode::Fullscreen;
+                    }
+                    if (mask & 2) {
+                        config.rr_option = b ? ultramodern::renderer::RefreshRate::Display : ultramodern::renderer::RefreshRate::Manual;
+                    }
+                    if (mask & 4) {
+                        config.ar_option = b ? ultramodern::renderer::AspectRatio::Original : ultramodern::renderer::AspectRatio::Expand;
+                    }
+                    if (mask & 32) {
+                        config.msaa_option = b ? ultramodern::renderer::Antialiasing::None : ultramodern::renderer::Antialiasing::MSAA4X;
+                    }
+                    if (mask & 64) {
+                        config.res_option = b ? ultramodern::renderer::Resolution::Original2x : ultramodern::renderer::Resolution::Auto;
+                    }
+
+                    recompui::framerate::apply_choice(config.rr_option, config.rr_manual_value, smooth_rate);
+                    ultramodern::renderer::set_graphics_config(config);
+                    if (mask & 16) {
+                        RT64::WcwRaytracer::setUserSettings(true, b ? 1u : 2u);
+                    }
+                    if (mask & 8) {
+                        RT64::CrtFilter::Settings crt = crt_base;
+                        crt.enabled = !b;
+                        RT64::CrtFilter::setUserSettings(crt);
+                    }
+
+                    fprintf(stderr, "[wcw stress] switch %llu: set %c\n", (unsigned long long)n, b ? 'B' : 'A');
+                }
+            }).detach();
+        }
+
         static void apply_graphics_config() {
             ultramodern::renderer::GraphicsConfig new_config;
             new_config.developer_mode = get_graphics_bool_value(graphics::options::developer_mode);
@@ -338,6 +398,9 @@ namespace recompui {
             RT64::CrtFilter::setUserSettings(crt_settings);
 
             graphics::apply_hdr_settings();
+
+            static std::once_flag stress_once;
+            std::call_once(stress_once, start_settings_stress);
         }
 
         void graphics::update_msaa_supported(bool supported) {
