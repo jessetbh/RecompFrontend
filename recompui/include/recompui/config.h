@@ -61,6 +61,8 @@ namespace recompui {
                 inline const std::string hpfb_option = "hpfb_option";
                 inline const std::string rr_manual_value = "rr_manual_value";
                 inline const std::string ds_option = "ds_option";
+                // [wcw] Supersampling at Auto resolution (Off / 2x).
+                inline const std::string ss_option = "ss_option";
                 // [wcw rt] Experimental hybrid ray tracing (RT64 WcwRaytracer).
                 inline const std::string rt_option = "rt_option";
                 inline const std::string rt_quality_option = "rt_quality_option";
