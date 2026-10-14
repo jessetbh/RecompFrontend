@@ -7,6 +7,7 @@
 #include "render/rt64_crt_filter.h"
 #include "render/rt64_hdr_output.h"
 #include "render/rt64_wcw_raytracer.h"
+#include "render/rt64_wcw_texture_edges.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -72,6 +73,18 @@ namespace recompui {
         #ifdef ALLOW_METAL
             {ultramodern::renderer::GraphicsApi::Metal, "Metal"},
         #endif
+        };
+
+        // [wcw] 2D texture edges: point-sampled art (crowds, signs, HUD, fonts) as the N64 draws it, or with its texel
+        // edges smoothed (sharp bilinear: texels stay crisp squares, seams blend over one screen pixel).
+        enum class TextureEdgesOption {
+            Original = 0,
+            Smooth = 1
+        };
+
+        static EnumOptionVector texture_edges_options = {
+            {TextureEdgesOption::Original, "Original", "Original"},
+            {TextureEdgesOption::Smooth, "Smooth", "Smooth"},
         };
 
         // [wcw rt] Experimental hybrid ray tracing.
@@ -381,6 +394,9 @@ namespace recompui {
             new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
 
             ultramodern::renderer::set_graphics_config(new_config);
+
+            // [wcw] Takes effect on the next frame.
+            RT64::WcwTextureEdges::setSmooth(get_graphics_enum_value<TextureEdgesOption>(graphics::options::texture_edges_option) == TextureEdgesOption::Smooth);
 
             // [wcw rt] Takes effect on the next frame (no renderer restart needed).
             RT64::WcwRaytracer::setUserSettings(
@@ -824,6 +840,17 @@ namespace recompui {
                     );
                 }
             }
+
+            config.add_enum_option(
+                graphics::options::texture_edges_option,
+                "2D Texture Edges",
+                "How pixel-art textures (crowds, signs, the HUD, fonts) look at high resolutions. "
+                "<recomp-color primary>Original</recomp-color> keeps the N64's sharp texel blocks. "
+                "<recomp-color primary>Smooth</recomp-color> keeps every texel a crisp square but softens the edges between them "
+                "over one screen pixel, so they don't look jagged or crawl when they move.",
+                texture_edges_options,
+                TextureEdgesOption::Original
+            );
 
             config.add_enum_option(
                 graphics::options::rt_option,
