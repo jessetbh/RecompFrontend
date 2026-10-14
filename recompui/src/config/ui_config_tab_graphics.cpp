@@ -94,6 +94,20 @@ namespace recompui {
             {RayTracingOption::On, "On", "On"},
         };
 
+        // Matches RT64::WcwLogic::VenueLighting: how strongly each venue's tuned lighting (darkness around the ring,
+        // glows, colored light) applies.
+        enum class VenueLightingOption {
+            Full = 0,
+            Subtle = 1,
+            Off = 2
+        };
+
+        static EnumOptionVector venue_lighting_options = {
+            {VenueLightingOption::Full, "Full", "Full"},
+            {VenueLightingOption::Subtle, "Subtle", "Subtle"},
+            {VenueLightingOption::Off, "Off", "Off"},
+        };
+
         static EnumOptionVector ray_tracing_quality_options = {
             {RayTracingQuality::Performance, "Performance", "Performance"},
             {RayTracingQuality::Balanced, "Balanced", "Balanced"},
@@ -386,6 +400,7 @@ namespace recompui {
             RT64::WcwRaytracer::setUserSettings(
                 get_graphics_enum_value<RayTracingOption>(graphics::options::rt_option) == RayTracingOption::On,
                 uint32_t(get_graphics_enum_value<RayTracingQuality>(graphics::options::rt_quality_option)));
+            RT64::WcwRaytracer::setVenueLighting(uint32_t(get_graphics_enum_value<VenueLightingOption>(graphics::options::rt_venue_lighting_option)));
 
             // [wcw crt] Takes effect on the next frame; the first use of a preset compiles its shaders.
             RT64::CrtFilter::Settings crt_settings;
@@ -852,6 +867,26 @@ namespace recompui {
             {
                 config.add_option_hidden_dependency(
                     graphics::options::rt_quality_option,
+                    graphics::options::rt_option,
+                    RayTracingOption::Off
+                );
+            }
+
+            config.add_enum_option(
+                graphics::options::rt_venue_lighting_option,
+                "Venue Lighting",
+                "How strongly each arena's own lighting applies with ray tracing on. "
+                "<recomp-color primary>Full</recomp-color> lights the ring and darkens the crowd around it, with the venue's colored "
+                "lights and glowing signs. "
+                "<recomp-color primary>Subtle</recomp-color> keeps the look at half strength, for a brighter arena. "
+                "<recomp-color primary>Off</recomp-color> uses plain white light with no darkness or glows; "
+                "ray-traced shadows and ambient occlusion stay.",
+                venue_lighting_options,
+                VenueLightingOption::Full
+            );
+            {
+                config.add_option_hidden_dependency(
+                    graphics::options::rt_venue_lighting_option,
                     graphics::options::rt_option,
                     RayTracingOption::Off
                 );

@@ -64,6 +64,7 @@ namespace recompui {
                 // [wcw rt] Experimental hybrid ray tracing (RT64 WcwRaytracer).
                 inline const std::string rt_option = "rt_option";
                 inline const std::string rt_quality_option = "rt_quality_option";
+                inline const std::string rt_venue_lighting_option = "rt_venue_lighting_option";
                 // [wcw crt] CRT presentation filter (RT64 CrtFilter).
                 inline const std::string crt_filter_option = "crt_filter_option";
                 inline const std::string crt_signal_option = "crt_signal_option";
