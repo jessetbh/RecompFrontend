@@ -13,6 +13,9 @@
 #include <mutex>
 #include <thread>
 
+#include "SDL.h"
+#include "ultramodern/ultramodern.hpp"
+
 static bool created_graphics_config = false;
 
 namespace recompui {
@@ -323,8 +326,30 @@ namespace recompui {
             const ultramodern::renderer::GraphicsConfig base = ultramodern::renderer::get_graphics_config();
             const RT64::CrtFilter::Settings crt_base = RT64::CrtFilter::userSettings();
             const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
-            fprintf(stderr, "[wcw stress] switching settings every %d ms, mask %u\n", period_ms, mask);
+            // WCW_SETTINGS_STRESS_MENU=1: open the config menu (an Escape press) once the game runs, so the switches
+            // happen with the menu open, as in the owner's crash.
+            const bool open_menu = getenv("WCW_SETTINGS_STRESS_MENU") != nullptr;
+            fprintf(stderr, "[wcw stress] switching settings every %d ms, mask %u%s\n", period_ms, mask, open_menu ? ", menu open" : "");
             std::thread([=]() {
+                if (open_menu) {
+                    while (!ultramodern::is_game_started()) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                    for (Uint32 type : { Uint32(SDL_KEYDOWN), Uint32(SDL_KEYUP) }) {
+                        SDL_Event event = {};
+                        event.type = type;
+                        event.key.state = (type == SDL_KEYDOWN) ? SDL_PRESSED : SDL_RELEASED;
+                        event.key.keysym.scancode = SDL_SCANCODE_ESCAPE;
+                        event.key.keysym.sym = SDLK_ESCAPE;
+                        SDL_PushEvent(&event);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+
+                    fprintf(stderr, "[wcw stress] config menu opened\n");
+                }
+
                 for (uint64_t n = 1;; n++) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(period_ms));
                     const bool b = (n % 2) == 1;
