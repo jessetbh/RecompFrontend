@@ -2,6 +2,10 @@
 #include <cstring>
 #include <variant>
 #include <algorithm>
+#include <atomic>
+#include <thread>
+
+#include "SDL.h"
 
 #include "hle/rt64_application.h"
 #include "render/rt64_hdr_output.h"
@@ -363,6 +367,22 @@ void renderer::RT64Context::send_dummy_workload(uint32_t fb_address) {
 }
 
 void renderer::RT64Context::update_screen() {
+    // [wcw] The GPU device was lost (a GPU hang or removal; the D3D12 backend logged why). Rendering can't continue:
+    // tell the player and quit through the normal shutdown (saves flush), instead of crashing in several renderer
+    // threads at once. The backend hands out scratch memory meanwhile, so nothing writes through null.
+    static std::atomic<bool> device_lost_handled = false;
+    if (plume::wcwDeviceLostFlag().load() && !device_lost_handled.exchange(true)) {
+        fprintf(stderr, "[wcw] graphics device lost: quitting\n");
+        fflush(stderr);
+        std::thread([]() {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Graphics device lost",
+                "The graphics card stopped responding (the GPU was reset), so the game has to close.\n\n"
+                "Your saves are kept. If this keeps happening, try lowering the Ray Tracing quality or the framerate.",
+                nullptr);
+            ultramodern::quit();
+        }).detach();
+    }
+
     check_refresh_rate_changes();
     app->updateScreen();
 }
