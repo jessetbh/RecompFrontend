@@ -6,6 +6,7 @@
 #include "elements/ui_button.h"
 #include "librecomp/config.hpp"
 #include "librecomp/mods.hpp"
+#include "recompui/config.h"
 
 namespace recompui {
     class ConfigPageOptionsMenu : public ConfigPage {
@@ -14,6 +15,8 @@ namespace recompui {
         bool is_internal = false;
 
         std::vector<ConfigOptionElement*> config_option_elements;
+        // [wcw] Button rows after the options (config::add_config_tab_action).
+        std::vector<config::ConfigTabAction> actions;
         Element *description_container = nullptr;
         std::string description_option_id = "";
         Button *apply_button = nullptr;
@@ -25,6 +28,7 @@ namespace recompui {
         set_option_value_t bound_set_option_value;
 
         void render_config_options();
+        void render_actions(Element *parent);
         void render_confirmation_footer();
         void on_option_hover(const std::string &option_id);
         void on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value);
@@ -36,7 +40,8 @@ namespace recompui {
             ResourceId rid,
             Element *parent,
             recomp::config::Config *config,
-            bool is_internal = false
+            bool is_internal = false,
+            std::vector<config::ConfigTabAction> actions = {}
         );
         virtual ~ConfigPageOptionsMenu() = default;
     };

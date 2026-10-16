@@ -39,6 +39,7 @@ constexpr float modal_page_padding = 64.0f;
 constexpr float modal_page_base_height = 1080.0f;
 constexpr float modal_height = modal_page_base_height - (modal_page_padding * 2.0f);
 constexpr float modal_width = modal_page_base_height * 16.0f / 9.0f;
+constexpr float prompt_modal_width = 900.0f;
 
 Modal::Modal(
     ResourceId rid,
@@ -87,6 +88,15 @@ Modal::Modal(
     modal_element->set_background_color(theme::color::ModalOverlay);
     modal_element->set_as_navigation_container(NavigationType::Vertical);
     modal_element->set_nav_wrapping(true);
+
+    // [wcw] A Prompt modal is a dialog: as tall as its contents (up to the page) and narrower.
+    if (modal_type == ModalType::Prompt) {
+        modal_element->set_flex(0.0f, 1.0f);
+        modal_element->set_flex_basis_auto();
+        modal_element->set_max_width(prompt_modal_width);
+        modal_element->set_height_auto();
+        modal_element->set_max_height(100, Unit::Percent);
+    }
 
     header = context.create_element<ConfigHeaderFooter>(modal_element, true);
     header->set_padding_top(0.0f);

@@ -18,8 +18,6 @@ namespace recompui {
                 inline const std::string mouse_sensitivity = "mouse_sensitivity";
                 inline const std::string joystick_deadzone = "joystick_deadzone";
                 inline const std::string background_input_mode = "background_input_mode";
-                // [wcw saves] An action, not a setting: picking a backup opens a confirmation (aki-roadmap#50).
-                inline const std::string restore_save_backup = "restore_save_backup";
 
                 inline const std::string debug_mode = "debug_mode";
             }
@@ -119,6 +117,23 @@ namespace recompui {
          * @param requires_confirmation  Whether the tab requires confirmation before closing. Adds an Apply button at the footer, and if the user tries to switch tabs or close the modal, they will be prompted to confirm or cancel changes.
          */
         recomp::config::Config &create_config_tab(const std::string &name, const std::string &id, bool requires_confirmation);
+
+        /**
+         * @brief [wcw] A button row at the bottom of a tab made with create_config_tab, for something the player does
+         * rather than sets (General > Restore a Backup). It shows a name and a button like an option's, and its
+         * description in the tab's description panel.
+         */
+        struct ConfigTabAction {
+            std::string name;
+            std::string description;
+            std::string button_label;
+            std::function<void()> on_pressed;
+        };
+
+        /**
+         * @brief [wcw] Adds an action to the tab of the config with this ID (after its options, in the order added).
+         */
+        void add_config_tab_action(const std::string &config_id, ConfigTabAction action);
 
         /**
          * @brief Adds a new tab to the config modal. This is for manually rendering your own tab's UI.
