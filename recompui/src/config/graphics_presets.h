@@ -59,8 +59,9 @@ namespace recompui::config::presets {
     enum class Preset {
         Authentic = 0,
         Enhanced = 1,
-        Max = 2,
-        Custom = 3
+        EnhancedRayTracing = 2,
+        Max = 3,
+        Custom = 4
     };
 
     // The options a preset sets. The CRT signal only counts with the CRT filter on, the ray tracing quality only with

@@ -40,8 +40,18 @@ TEST_CASE("Authentic is the game as it shipped on a composite TV") {
     CHECK_EQ(val(s.hdr), val(HdrOption::Off));
 }
 
-TEST_CASE("Enhanced is Expand, 60 fps (Smooth), MSAA 4x, RT Balanced, no CRT or HDR") {
+TEST_CASE("Enhanced is Expand, 60 fps (Smooth), MSAA 4x, no ray tracing, CRT or HDR") {
     const Settings s = preset(Preset::Enhanced);
+    CHECK_EQ(val(s.aspect_ratio), val(AspectRatio::Expand));
+    CHECK_EQ(val(s.framerate), val(RefreshRate::Manual));
+    CHECK_EQ(val(s.msaa), val(Antialiasing::MSAA4X));
+    CHECK_EQ(val(s.crt), val(CrtFilterOption::Off));
+    CHECK_EQ(val(s.rt), val(RayTracingOption::Off));
+    CHECK_EQ(val(s.hdr), val(HdrOption::Off));
+}
+
+TEST_CASE("Enhanced Ray Tracing is Expand, 60 fps (Smooth), MSAA 4x, RT Balanced, no CRT or HDR") {
+    const Settings s = preset(Preset::EnhancedRayTracing);
     CHECK_EQ(val(s.aspect_ratio), val(AspectRatio::Expand));
     CHECK_EQ(val(s.framerate), val(RefreshRate::Manual));
     CHECK_EQ(val(s.msaa), val(Antialiasing::MSAA4X));
@@ -49,6 +59,48 @@ TEST_CASE("Enhanced is Expand, 60 fps (Smooth), MSAA 4x, RT Balanced, no CRT or 
     CHECK_EQ(val(s.rt), val(RayTracingOption::On));
     CHECK_EQ(val(s.rt_quality), val(RayTracingQuality::Balanced));
     CHECK_EQ(val(s.hdr), val(HdrOption::Off));
+}
+
+TEST_CASE("Enhanced and Enhanced Ray Tracing differ only in ray tracing") {
+    const Settings plain = preset(Preset::Enhanced);
+    Settings s = preset(Preset::EnhancedRayTracing);
+    s.rt = RayTracingOption::Off;
+    CHECK_EQ(val(s.aspect_ratio), val(plain.aspect_ratio));
+    CHECK_EQ(val(s.framerate), val(plain.framerate));
+    CHECK_EQ(val(s.msaa), val(plain.msaa));
+    CHECK_EQ(val(s.crt), val(plain.crt));
+    CHECK_EQ(val(s.hdr), val(plain.hdr));
+    CHECK_EQ(val(matching_preset(s, interpolating())), val(Preset::Enhanced));
+}
+
+TEST_CASE("the default is Enhanced, with ray tracing off") {
+    // The tab builds the options' defaults from settings_for(Enhanced) and the Preset option defaults to Enhanced, so a
+    // fresh config is these settings.
+    const Settings defaults = preset(Preset::Enhanced);
+    CHECK_EQ(val(defaults.rt), val(RayTracingOption::Off));
+    CHECK_EQ(val(matching_preset(defaults, interpolating())), val(Preset::Enhanced));
+
+    // The default Settings (Expand, Original framerate, no MSAA) match nothing; only Enhanced's do.
+    CHECK_EQ(val(matching_preset(Settings{}, interpolating())), val(Preset::Custom));
+}
+
+TEST_CASE("the old Enhanced (RT Balanced) now matches Enhanced Ray Tracing") {
+    Settings s;
+    s.aspect_ratio = AspectRatio::Expand;
+    s.framerate = RefreshRate::Manual;
+    s.msaa = Antialiasing::MSAA4X;
+    s.rt = RayTracingOption::On;
+    s.rt_quality = RayTracingQuality::Balanced;
+    CHECK_EQ(val(matching_preset(s, interpolating())), val(Preset::EnhancedRayTracing));
+    CHECK(!matches(Preset::Enhanced, s, interpolating()));
+}
+
+TEST_CASE("stored preset values follow the menu order") {
+    CHECK_EQ(val(Preset::Authentic), 0);
+    CHECK_EQ(val(Preset::Enhanced), 1);
+    CHECK_EQ(val(Preset::EnhancedRayTracing), 2);
+    CHECK_EQ(val(Preset::Max), 3);
+    CHECK_EQ(val(Preset::Custom), 4);
 }
 
 TEST_CASE("Max is 120 fps (Smooth2x), MSAA 4x, RT Ultra, HDR Auto") {
@@ -80,7 +132,7 @@ TEST_CASE("Max runs 120 only where the display allows it, otherwise the smooth r
 TEST_CASE("a game with a locked framerate stays at Original in every preset") {
     Limits limits = interpolating();
     limits.smooth_rate = 0;
-    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::Max }) {
+    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::EnhancedRayTracing, Preset::Max }) {
         CHECK_EQ(val(preset(p, limits).framerate), val(RefreshRate::Original));
     }
 }
@@ -89,6 +141,7 @@ TEST_CASE("MSAA is capped at what the GPU offers") {
     Limits limits = interpolating();
     limits.max_msaa = Antialiasing::MSAA2X;
     CHECK_EQ(val(preset(Preset::Enhanced, limits).msaa), val(Antialiasing::MSAA2X));
+    CHECK_EQ(val(preset(Preset::EnhancedRayTracing, limits).msaa), val(Antialiasing::MSAA2X));
     CHECK_EQ(val(preset(Preset::Max, limits).msaa), val(Antialiasing::MSAA2X));
     limits.max_msaa = Antialiasing::None;
     CHECK_EQ(val(preset(Preset::Max, limits).msaa), val(Antialiasing::None));
@@ -97,23 +150,24 @@ TEST_CASE("MSAA is capped at what the GPU offers") {
 TEST_CASE("Custom sets nothing") {
     CHECK(!settings_for(Preset::Custom, interpolating()).has_value());
     CHECK(!matches(Preset::Custom, preset(Preset::Enhanced), interpolating()));
+    CHECK(!matches(Preset::Custom, preset(Preset::EnhancedRayTracing), interpolating()));
 }
 
 TEST_CASE("each preset's settings match that preset") {
-    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::Max }) {
+    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::EnhancedRayTracing, Preset::Max }) {
         CHECK_EQ(val(matching_preset(preset(p), interpolating())), val(p));
     }
 
     Limits locked = interpolating();
     locked.smooth_rate = 0;
     locked.max_msaa = Antialiasing::None;
-    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::Max }) {
+    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::EnhancedRayTracing, Preset::Max }) {
         CHECK_EQ(val(matching_preset(preset(p, locked), locked)), val(p));
     }
 }
 
 TEST_CASE("changing any one option a preset sets makes it Custom") {
-    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::Max }) {
+    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::EnhancedRayTracing, Preset::Max }) {
         const Settings base = preset(p);
         Settings s;
 
@@ -135,7 +189,10 @@ TEST_CASE("changing any one option a preset sets makes it Custom") {
 
         s = base;
         s.rt = (base.rt == RayTracingOption::On) ? RayTracingOption::Off : RayTracingOption::On;
-        CHECK_EQ(val(matching_preset(s, interpolating())), val(Preset::Custom));
+        // Ray tracing is the one difference between Enhanced and Enhanced Ray Tracing.
+        const Preset rt_toggled = (p == Preset::Enhanced) ? Preset::EnhancedRayTracing :
+            (p == Preset::EnhancedRayTracing) ? Preset::Enhanced : Preset::Custom;
+        CHECK_EQ(val(matching_preset(s, interpolating())), val(rt_toggled));
 
         s = base;
         s.hdr = (base.hdr == HdrOption::On) ? HdrOption::Off : HdrOption::On;
@@ -146,7 +203,7 @@ TEST_CASE("changing any one option a preset sets makes it Custom") {
     s.crt_signal = CrtSignalOption::RGB;
     CHECK_EQ(val(matching_preset(s, interpolating())), val(Preset::Custom));
 
-    s = preset(Preset::Enhanced);
+    s = preset(Preset::EnhancedRayTracing);
     s.rt_quality = RayTracingQuality::Quality;
     CHECK_EQ(val(matching_preset(s, interpolating())), val(Preset::Custom));
 
@@ -164,6 +221,10 @@ TEST_CASE("hidden sub-options don't count: CRT signal with CRT off, RT quality w
     s = preset(Preset::Authentic);
     s.rt_quality = RayTracingQuality::Ultra;
     CHECK_EQ(val(matching_preset(s, interpolating())), val(Preset::Authentic));
+
+    s = preset(Preset::Enhanced);
+    s.rt_quality = RayTracingQuality::Performance;
+    CHECK_EQ(val(matching_preset(s, interpolating())), val(Preset::Enhanced));
 }
 
 TEST_CASE("options the presets leave alone don't count") {

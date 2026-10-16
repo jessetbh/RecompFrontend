@@ -29,10 +29,12 @@ namespace recompui::config::presets {
             settings.crt_signal = CrtSignalOption::Composite;
             break;
         case Preset::Enhanced:
+        case Preset::EnhancedRayTracing:
+            // The default. Enhanced Ray Tracing is the same with ray tracing on.
             settings.aspect_ratio = AspectRatio::Expand;
             settings.framerate = smooth ? RefreshRate::Manual : RefreshRate::Original;
             settings.msaa = Antialiasing::MSAA4X;
-            settings.rt = RayTracingOption::On;
+            settings.rt = (preset == Preset::EnhancedRayTracing) ? RayTracingOption::On : RayTracingOption::Off;
             settings.rt_quality = RayTracingQuality::Balanced;
             break;
         case Preset::Max:
@@ -72,7 +74,8 @@ namespace recompui::config::presets {
     }
 
     Preset matching_preset(const Settings &current, const Limits &limits) {
-        for (Preset preset : { Preset::Authentic, Preset::Enhanced, Preset::Max }) {
+        // Enhanced and Enhanced Ray Tracing differ only in ray tracing, so at most one of them matches.
+        for (Preset preset : { Preset::Authentic, Preset::Enhanced, Preset::EnhancedRayTracing, Preset::Max }) {
             if (matches(preset, current, limits)) {
                 return preset;
             }

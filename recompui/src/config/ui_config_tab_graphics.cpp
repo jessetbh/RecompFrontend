@@ -359,6 +359,7 @@ namespace recompui {
         static EnumOptionVector preset_options = {
             {presets::Preset::Authentic, "Authentic", "Authentic"},
             {presets::Preset::Enhanced, "Enhanced", "Enhanced"},
+            {presets::Preset::EnhancedRayTracing, "EnhancedRayTracing", "Enhanced Ray Tracing"},
             {presets::Preset::Max, "Max", "Max"},
             {presets::Preset::Custom, "Custom", "Custom"},
         };
@@ -683,8 +684,9 @@ namespace recompui {
                 "Preset",
                 "Sets the main graphics options in one go; you can still change any of them afterwards. "
                 "<recomp-color primary>Authentic</recomp-color>: the game as it shipped, in 4:3 at 30 fps on a simulated composite TV (the CRT filter). "
-                "<recomp-color primary>Enhanced</recomp-color>: widescreen, smooth motion (60 fps where the game offers it), MSAA 4x and ray-traced shadows (Balanced). "
-                "<recomp-color primary>Max</recomp-color>: Enhanced at 120 fps on a 120 Hz or faster display, with Ultra ray tracing and HDR (Auto). "
+                "<recomp-color primary>Enhanced</recomp-color> (the default): widescreen, smooth motion (60 fps where the game offers it) and MSAA 4x, without ray tracing. "
+                "<recomp-color primary>Enhanced Ray Tracing</recomp-color>: Enhanced with ray-traced shadows and ambient occlusion (Balanced). "
+                "<recomp-color primary>Max</recomp-color>: Enhanced Ray Tracing at 120 fps on a 120 Hz or faster display, with Ultra ray tracing and HDR (Auto). "
                 "<recomp-color primary>Custom</recomp-color> shows when the options match none of these."
                 "<br />"
                 "<br />"
