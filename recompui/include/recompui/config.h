@@ -53,6 +53,8 @@ namespace recompui {
     
             namespace options {
                 inline const std::string developer_mode = "developer_mode";
+                // [wcw] Graphics presets (src/config/graphics_presets.h).
+                inline const std::string preset = "graphics_preset";
                 inline const std::string res_option = "res_option";
                 inline const std::string wm_option = "wm_option";
                 inline const std::string hr_option = "hr_option";

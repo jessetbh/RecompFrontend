@@ -3,6 +3,7 @@
 #include "recompui/renderer.h"
 #include "recompui/program_config.h"
 #include "framerate_rules.h"
+#include "graphics_presets.h"
 #include "graphics_rules.h"
 #include "util/steam_deck.h"
 #include "render/rt64_crt_filter.h"
@@ -10,6 +11,8 @@
 #include "render/rt64_wcw_raytracer.h"
 #include "render/rt64_wcw_texture_edges.h"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <mutex>
@@ -99,21 +102,7 @@ namespace recompui {
             {TextureEdgesOption::Smooth, "Smooth", "Smooth"},
         };
 
-        // [wcw rt] Experimental hybrid ray tracing.
-        enum class RayTracingOption {
-            Off = 0,
-            On = 1
-        };
-
-        // Matches RT64::WcwLogic::RtQuality. Ambient occlusion comes with the level (none on Performance, Subtle on
-        // Balanced, Strong on Quality and Ultra), so there is no separate AO option.
-        enum class RayTracingQuality {
-            Performance = 0,
-            Balanced = 1,
-            Quality = 2,
-            Ultra = 3
-        };
-
+        // [wcw rt] Experimental hybrid ray tracing. The option enums (also used by the presets) are in graphics_presets.h.
         static EnumOptionVector ray_tracing_options = {
             {RayTracingOption::Off, "Off", "Off"},
             {RayTracingOption::On, "On", "On"},
@@ -128,18 +117,6 @@ namespace recompui {
 
         // [wcw crt] CRT filter: on/off, the video signal (a preset in crt/presets/ next to the
         // executable) and the TV's color standard.
-        enum class CrtFilterOption {
-            Off = 0,
-            On = 1
-        };
-
-        enum class CrtSignalOption {
-            Composite = 0,
-            SVideo = 1,
-            RF = 2,
-            RGB = 3
-        };
-
         enum class CrtColorsOption {
             USA = 0,
             Japan = 1
@@ -163,23 +140,9 @@ namespace recompui {
         };
 
         // [wcw hdr] HDR output.
-        enum class HdrOption {
-            Off = 0,
-            On = 1
-        };
-
         static EnumOptionVector hdr_options = {
             {HdrOption::Off, "Off", "Off"},
             {HdrOption::On, "On", "On"},
-        };
-
-        // Same values as RT64::WcwLogic::HdrPicture.
-        enum class HdrPictureOption {
-            Auto = 0,
-            Brighter = 1,
-            Balanced = 2,
-            CrtDetail = 3,
-            Custom = 4
         };
 
         static EnumOptionVector hdr_picture_options = {
@@ -386,6 +349,113 @@ namespace recompui {
             }).detach();
         }
 
+        // [wcw] Graphics presets (graphics_presets.h). The display's refresh rate and the GPU's MSAA levels arrive once
+        // the renderer runs; until then Max assumes a fast enough display and MSAA 4x.
+        static std::atomic<uint32_t> preset_display_rate = 0;
+        static std::atomic<ultramodern::renderer::Antialiasing> preset_max_msaa = ultramodern::renderer::Antialiasing::MSAA4X;
+        // Set while the tab itself changes the preset or its options, so those changes aren't taken as the player's.
+        static bool syncing_preset = false;
+
+        static EnumOptionVector preset_options = {
+            {presets::Preset::Authentic, "Authentic", "Authentic"},
+            {presets::Preset::Enhanced, "Enhanced", "Enhanced"},
+            {presets::Preset::EnhancedRayTracing, "EnhancedRayTracing", "Enhanced Ray Tracing"},
+            {presets::Preset::Max, "Max", "Max"},
+            {presets::Preset::Custom, "Custom", "Custom"},
+        };
+
+        // The options a preset sets.
+        static const std::vector<std::string> &preset_option_ids() {
+            static const std::vector<std::string> ids = {
+                graphics::options::ar_option, graphics::options::rr_option, graphics::options::msaa_option,
+                graphics::options::crt_filter_option, graphics::options::crt_signal_option,
+                graphics::options::rt_option, graphics::options::rt_quality_option,
+                graphics::options::hdr_option, graphics::options::hdr_picture,
+            };
+            return ids;
+        }
+
+        static presets::Limits preset_limits() {
+            presets::Limits limits;
+            limits.smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
+            limits.display_rate = preset_display_rate;
+            limits.max_msaa = preset_max_msaa;
+            return limits;
+        }
+
+        static presets::Settings preset_settings(OptionChangeContext change_context) {
+            presets::Settings settings;
+            settings.aspect_ratio = get_graphics_enum_value<ultramodern::renderer::AspectRatio>(graphics::options::ar_option, change_context);
+            settings.framerate = get_graphics_enum_value<ultramodern::renderer::RefreshRate>(graphics::options::rr_option, change_context);
+            settings.msaa = get_graphics_enum_value<ultramodern::renderer::Antialiasing>(graphics::options::msaa_option, change_context);
+            settings.crt = get_graphics_enum_value<CrtFilterOption>(graphics::options::crt_filter_option, change_context);
+            settings.crt_signal = get_graphics_enum_value<CrtSignalOption>(graphics::options::crt_signal_option, change_context);
+            settings.rt = get_graphics_enum_value<RayTracingOption>(graphics::options::rt_option, change_context);
+            settings.rt_quality = get_graphics_enum_value<RayTracingQuality>(graphics::options::rt_quality_option, change_context);
+            settings.hdr = get_graphics_enum_value<HdrOption>(graphics::options::hdr_option, change_context);
+            settings.hdr_picture = get_graphics_enum_value<HdrPictureOption>(graphics::options::hdr_picture, change_context);
+            return settings;
+        }
+
+        // Picking a preset sets its options in the menu through set_option_value, like any change; Apply keeps them.
+        // Sub-options of something the preset turns off (CRT signal, RT quality, HDR picture) keep the player's choice.
+        static void stage_preset(presets::Preset preset) {
+            const presets::Limits limits = preset_limits();
+            const std::optional<presets::Settings> settings = presets::settings_for(preset, limits);
+            if (!settings) {
+                return;
+            }
+
+            recomp::config::Config &config = get_graphics_config();
+            syncing_preset = true;
+            config.update_option_value(graphics::options::ar_option, static_cast<uint32_t>(settings->aspect_ratio));
+            if (limits.smooth_rate > 0) {
+                config.update_option_value(graphics::options::rr_option, static_cast<uint32_t>(settings->framerate));
+            }
+            config.update_option_value(graphics::options::msaa_option, static_cast<uint32_t>(settings->msaa));
+            config.update_option_value(graphics::options::crt_filter_option, static_cast<uint32_t>(settings->crt));
+            if (settings->crt == CrtFilterOption::On) {
+                config.update_option_value(graphics::options::crt_signal_option, static_cast<uint32_t>(settings->crt_signal));
+            }
+            config.update_option_value(graphics::options::rt_option, static_cast<uint32_t>(settings->rt));
+            if (settings->rt == RayTracingOption::On) {
+                config.update_option_value(graphics::options::rt_quality_option, static_cast<uint32_t>(settings->rt_quality));
+            }
+            config.update_option_value(graphics::options::hdr_option, static_cast<uint32_t>(settings->hdr));
+            if (settings->hdr == HdrOption::On) {
+                config.update_option_value(graphics::options::hdr_picture, static_cast<uint32_t>(settings->hdr_picture));
+            }
+            syncing_preset = false;
+        }
+
+        // After the player changes one of the preset's options: the preset shows what the options now match, which is
+        // Custom unless they match a preset again. Following the options (rather than only ever switching to Custom)
+        // also keeps the preset right when Cancel puts every option back.
+        static void follow_preset(OptionChangeContext change_context) {
+            if (syncing_preset || (change_context != OptionChangeContext::Temporary)) {
+                return;
+            }
+
+            const presets::Preset matched = presets::matching_preset(preset_settings(OptionChangeContext::Temporary), preset_limits());
+            if (matched != get_graphics_enum_value<presets::Preset>(graphics::options::preset, OptionChangeContext::Temporary)) {
+                syncing_preset = true;
+                get_graphics_config().update_option_value(graphics::options::preset, static_cast<uint32_t>(matched));
+                syncing_preset = false;
+            }
+        }
+
+        // On load the saved preset is set to what the saved options match (a config from before presets has none, and
+        // the file can be edited by hand), through the same set/apply calls as the fullscreen toggle.
+        static void reconcile_saved_preset() {
+            const presets::Preset matched = presets::matching_preset(preset_settings(OptionChangeContext::Permanent), preset_limits());
+            if (matched != get_graphics_enum_value<presets::Preset>(graphics::options::preset)) {
+                syncing_preset = true;
+                get_graphics_config().set_option_value(graphics::options::preset, static_cast<uint32_t>(matched));
+                get_graphics_config().apply_option_value(graphics::options::preset);
+                syncing_preset = false;
+            }
+        }
+
         static void apply_graphics_config() {
             ultramodern::renderer::GraphicsConfig new_config;
             new_config.developer_mode = get_graphics_bool_value(graphics::options::developer_mode);
@@ -437,6 +507,7 @@ namespace recompui {
         void graphics::update_msaa_supported(bool supported) {
             recomp::config::Config &config = get_graphics_config();
             if (!supported) {
+                preset_max_msaa = ultramodern::renderer::Antialiasing::None;
                 config.update_option_enum_details(
                     graphics::options::msaa_option,
                     supported ? "Available" : "Not available (missing sample positions support)"
@@ -448,6 +519,8 @@ namespace recompui {
             } else {
                 // [wcw] RT64's levels are listed in the same order as ultramodern's (None, 2X, 4X, 8X).
                 const auto max_msaa = static_cast<ultramodern::renderer::Antialiasing>(recompui::renderer::RT64MaxMSAA());
+                // The presets use up to 4X.
+                preset_max_msaa = std::min(max_msaa, ultramodern::renderer::Antialiasing::MSAA4X);
                 for (auto level : { ultramodern::renderer::Antialiasing::MSAA2X, ultramodern::renderer::Antialiasing::MSAA4X, ultramodern::renderer::Antialiasing::MSAA8X }) {
                     if (!recompui::graphics_rules::msaa_level_supported(level, max_msaa)) {
                         config.update_enum_option_disabled(graphics::options::msaa_option, static_cast<uint32_t>(level), true);
@@ -568,6 +641,7 @@ namespace recompui {
 
         void graphics::update_refresh_rate(uint32_t refresh_rate) {
             recomp::config::Config& config = get_graphics_config();
+            preset_display_rate = refresh_rate;
             std::string framerate_text = get_framerate_text(refresh_rate);
             // [wcw hfr] The smooth-rate option describes itself; only the locked option shows the display rate.
             if (recompui::programconfig::get_frame_interpolation().smooth_rate == 0) {
@@ -589,7 +663,10 @@ namespace recompui {
 
             recomp::config::Config &config = recompui::config::create_config_tab(name, graphics::id, true);
             config.set_save_callback(apply_graphics_config);
-            config.set_load_callback(apply_graphics_config);
+            config.set_load_callback([]() {
+                reconcile_saved_preset();
+                apply_graphics_config();
+            });
 
             config.add_bool_option(
                 graphics::options::developer_mode,
@@ -598,6 +675,37 @@ namespace recompui {
                 false,
                 true
             );
+
+            // [wcw] Graphics presets. The options' defaults are Enhanced's, so a new player starts on Enhanced.
+            const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
+            const presets::Settings enhanced = presets::settings_for(presets::Preset::Enhanced, preset_limits()).value();
+            config.add_enum_option(
+                graphics::options::preset,
+                "Preset",
+                "Sets the main graphics options in one go; you can still change any of them afterwards. "
+                "<recomp-color primary>Authentic</recomp-color>: the game as it shipped, in 4:3 at 30 fps on a simulated composite TV (the CRT filter). "
+                "<recomp-color primary>Enhanced</recomp-color> (the default): widescreen, smooth motion (60 fps where the game offers it) and MSAA 4x, without ray tracing. "
+                "<recomp-color primary>Enhanced Ray Tracing</recomp-color>: Enhanced with ray-traced shadows and ambient occlusion (Balanced). "
+                "<recomp-color primary>Max</recomp-color>: Enhanced Ray Tracing at 120 fps on a 120 Hz or faster display, with Ultra ray tracing and HDR (Auto). "
+                "<recomp-color primary>Custom</recomp-color> shows when the options match none of these."
+                "<br />"
+                "<br />"
+                "<recomp-color primary>Ray tracing needs an RTX-class GPU with D3D12, and HDR needs Windows HDR and a restart of the game; without them those parts have no effect.</recomp-color>",
+                preset_options,
+                presets::Preset::Enhanced
+            );
+            {
+                // Custom is only ever shown, never picked.
+                config.update_enum_option_disabled(graphics::options::preset, static_cast<uint32_t>(presets::Preset::Custom), true);
+                config.add_option_change_callback(
+                    graphics::options::preset,
+                    [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant, OptionChangeContext change_context) {
+                        if (!syncing_preset && (change_context == OptionChangeContext::Temporary)) {
+                            stage_preset(static_cast<presets::Preset>(std::get<uint32_t>(cur_value)));
+                        }
+                    }
+                );
+            }
 
             config.add_enum_option(
                 graphics::options::res_option,
@@ -690,7 +798,7 @@ namespace recompui {
                 "Aspect Ratio",
                 "Sets the horizontal aspect ratio. <recomp-color primary>Original</recomp-color> uses the game's original 4:3 aspect ratio. <recomp-color primary>Expand</recomp-color> will adjust to match the game window's aspect ratio.",
                 aspect_ratio_options,
-                ultramodern::renderer::AspectRatio::Expand
+                enhanced.aspect_ratio
             );
 
             config.add_enum_option(
@@ -704,14 +812,13 @@ namespace recompui {
             // [wcw hfr] Framerate: games that declare frame interpolation (programconfig::set_frame_interpolation)
             // offer "30 (Original)" / "<rate> (Smooth)", defaulting to Original. Games that don't stay locked to
             // Original: these engines submit only combined matrices, which RT64 can't interpolate on its own.
-            const uint32_t smooth_rate = recompui::programconfig::get_frame_interpolation().smooth_rate;
             static EnumOptionVector framerate_options = (smooth_rate > 0) ? smooth_rate_options(smooth_rate) : refresh_rate_options;
             config.add_enum_option(
                 graphics::options::rr_option,
                 (smooth_rate > 0) ? "Framerate (Experimental)" : "Framerate",
                 (smooth_rate > 0) ? smooth_rate_description(smooth_rate) : get_framerate_text(60),
                 framerate_options,
-                ultramodern::renderer::RefreshRate::Original
+                enhanced.framerate
             );
 
             config.add_number_option(
@@ -753,7 +860,7 @@ namespace recompui {
                 "<br />"
                 "<recomp-color primary>Note: This option won't be available if your GPU does not support programmable MSAA sample positions, as it is currently required to avoid rendering glitches.</recomp-color>",
                 antialiasing_options,
-                ultramodern::renderer::Antialiasing::MSAA2X
+                enhanced.msaa
             );
 
             config.add_enum_option(
@@ -792,7 +899,7 @@ namespace recompui {
                 "<br />"
                 "The first use of each signal takes a few seconds to prepare.",
                 crt_filter_options,
-                CrtFilterOption::Off
+                enhanced.crt
             );
 
             config.add_enum_option(
@@ -851,7 +958,7 @@ namespace recompui {
                 "HDR (Experimental)",
                 hdr_description,
                 hdr_options,
-                HdrOption::Off
+                enhanced.hdr
             );
 
             config.add_enum_option(
@@ -879,16 +986,6 @@ namespace recompui {
                     graphics::options::hdr_picture,
                     HdrPictureOption::Auto, HdrPictureOption::Brighter, HdrPictureOption::Balanced, HdrPictureOption::CrtDetail
                 );
-
-                // The readout follows the choices that change it while the menu is open.
-                for (const std::string &option : { graphics::options::hdr_picture, graphics::options::hdr_custom_nits,
-                    graphics::options::crt_filter_option, graphics::options::crt_beam_option }) {
-                    config.add_option_change_callback(option,
-                        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, OptionChangeContext change_context) {
-                            update_hdr_picture_readout(change_context);
-                        }
-                    );
-                }
             }
 
             config.add_enum_option(
@@ -911,7 +1008,7 @@ namespace recompui {
                 "<br />"
                 "<recomp-color primary>Requires an RTX-class GPU with DirectX Raytracing 1.1 and the D3D12 graphics API.</recomp-color> It has no effect otherwise.",
                 ray_tracing_options,
-                RayTracingOption::Off
+                enhanced.rt
             );
 
             config.add_enum_option(
@@ -924,7 +1021,7 @@ namespace recompui {
                 "<recomp-color primary>Ultra</recomp-color> keeps Quality's look with twice the rays, for the cleanest result; "
                 "it costs the most and suits fast GPUs.",
                 ray_tracing_quality_options,
-                RayTracingQuality::Balanced
+                enhanced.rt_quality
             );
             {
                 config.add_option_hidden_dependency(
@@ -932,6 +1029,35 @@ namespace recompui {
                     graphics::options::rt_option,
                     RayTracingOption::Off
                 );
+            }
+
+            // An option has one change callback, so this registers them for both uses: the HDR Picture readout follows
+            // the choices that change it while the menu is open, and the preset follows the options it sets.
+            {
+                const std::vector<std::string> readout_ids = { graphics::options::hdr_picture, graphics::options::hdr_custom_nits,
+                    graphics::options::crt_filter_option, graphics::options::crt_beam_option };
+                const std::vector<std::string> &preset_ids = preset_option_ids();
+                std::vector<std::string> ids = readout_ids;
+                for (const std::string &option : preset_ids) {
+                    if (std::find(ids.begin(), ids.end(), option) == ids.end()) {
+                        ids.push_back(option);
+                    }
+                }
+
+                for (const std::string &option : ids) {
+                    const bool readout = std::find(readout_ids.begin(), readout_ids.end(), option) != readout_ids.end();
+                    const bool preset = std::find(preset_ids.begin(), preset_ids.end(), option) != preset_ids.end();
+                    config.add_option_change_callback(option,
+                        [readout, preset](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, OptionChangeContext change_context) {
+                            if (readout) {
+                                update_hdr_picture_readout(change_context);
+                            }
+                            if (preset) {
+                                follow_preset(change_context);
+                            }
+                        }
+                    );
+                }
             }
 
             return config;

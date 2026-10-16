@@ -123,8 +123,8 @@ target_link_libraries(recompui PUBLIC
     miniz
 )
 
-# [wcw] Unit tests for the Framerate, resolution and MSAA options' rules (tests/). They build and run as part of every
-# recompui build, so a failing test fails the game's build. RECOMPUI_WCW_TESTS=OFF skips them.
+# [wcw] Unit tests for the Framerate, resolution and MSAA options' rules and the graphics presets (tests/). They build
+# and run as part of every recompui build, so a failing test fails the game's build. RECOMPUI_WCW_TESTS=OFF skips them.
 option(RECOMPUI_WCW_TESTS "Build and run the wcw unit tests with recompui" ON)
 if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
     add_executable(recompui_wcw_tests
@@ -132,6 +132,8 @@ if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/framerate_rules.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/graphics_rules_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/graphics_rules.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/graphics_presets_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/graphics_presets.cpp
     )
     target_include_directories(recompui_wcw_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config
