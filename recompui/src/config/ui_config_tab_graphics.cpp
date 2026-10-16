@@ -4,10 +4,12 @@
 #include "recompui/program_config.h"
 #include "framerate_rules.h"
 #include "graphics_presets.h"
+#include "graphics_rules.h"
 #include "util/steam_deck.h"
 #include "render/rt64_crt_filter.h"
 #include "render/rt64_hdr_output.h"
 #include "render/rt64_wcw_raytracer.h"
+#include "render/rt64_wcw_texture_edges.h"
 
 #include <algorithm>
 #include <atomic>
@@ -49,6 +51,17 @@ namespace recompui {
             {DownsamplingOption::X4, "4x"},
         };
 
+        // [wcw] Supersampling at Auto resolution: renders at twice the window's scale and box-filters it down
+        // (graphics_rules.h). Stored like Downsampling Quality (Off = 0, 2x = 2).
+        enum class SupersamplingOption {
+            Off = 0,
+            X2 = 2,
+        };
+        static EnumOptionVector supersampling_options = {
+            {SupersamplingOption::Off, "Off"},
+            {SupersamplingOption::X2, "2x"},
+        };
+
         static EnumOptionVector window_mode_options = {
             {ultramodern::renderer::WindowMode::Windowed, "Windowed"},
             {ultramodern::renderer::WindowMode::Fullscreen, "Fullscreen"}
@@ -75,6 +88,18 @@ namespace recompui {
         #ifdef ALLOW_METAL
             {ultramodern::renderer::GraphicsApi::Metal, "Metal"},
         #endif
+        };
+
+        // [wcw] 2D texture edges: point-sampled art (crowds, signs, HUD, fonts) as the N64 draws it, or with its texel
+        // edges smoothed (sharp bilinear: texels stay crisp squares, seams blend over one screen pixel).
+        enum class TextureEdgesOption {
+            Original = 0,
+            Smooth = 1
+        };
+
+        static EnumOptionVector texture_edges_options = {
+            {TextureEdgesOption::Original, "Original", "Original"},
+            {TextureEdgesOption::Smooth, "Smooth", "Smooth"},
         };
 
         // [wcw rt] Experimental hybrid ray tracing. The option enums (also used by the presets) are in graphics_presets.h.
@@ -158,7 +183,7 @@ namespace recompui {
             {ultramodern::renderer::Antialiasing::None, "None"},
             {ultramodern::renderer::Antialiasing::MSAA2X, "MSAA2X", "2X"},
             {ultramodern::renderer::Antialiasing::MSAA4X, "MSAA4X", "4X"},
-            // {ultramodern::renderer::Antialiasing::MSAA8X, "MSAA8X"},
+            {ultramodern::renderer::Antialiasing::MSAA8X, "MSAA8X", "8X"},
         };
 
         static EnumOptionVector refresh_rate_options = {
@@ -205,7 +230,7 @@ namespace recompui {
             switch (res_option) {
                 default:
                 case ultramodern::renderer::Resolution::Auto:
-                    return "Downsampling is not available at auto resolution";
+                    return "";
                 case ultramodern::renderer::Resolution::Original:
                     if (ds_option == DownsamplingOption::X2) {
                         return "Rendered in 480p and scaled to 240p";
@@ -447,9 +472,15 @@ namespace recompui {
             recompui::framerate::apply_choice(new_config.rr_option, new_config.rr_manual_value,
                 recompui::programconfig::get_frame_interpolation().smooth_rate);
 
-            new_config.ds_option = get_graphics_enum_value<int>(graphics::options::ds_option);
+            // [wcw] How many times the output size the game renders at: Downsampling Quality at Original and
+            // Original 2x, Supersampling at Auto (graphics_rules.h).
+            new_config.ds_option = recompui::graphics_rules::downsample_multiplier(new_config.res_option,
+                get_graphics_enum_value<int>(graphics::options::ds_option), get_graphics_enum_value<int>(graphics::options::ss_option));
 
             ultramodern::renderer::set_graphics_config(new_config);
+
+            // [wcw] Takes effect on the next frame.
+            RT64::WcwTextureEdges::setSmooth(get_graphics_enum_value<TextureEdgesOption>(graphics::options::texture_edges_option) == TextureEdgesOption::Smooth);
 
             // [wcw rt] Takes effect on the next frame (no renderer restart needed).
             RT64::WcwRaytracer::setUserSettings(
@@ -485,15 +516,14 @@ namespace recompui {
                     true
                 );
             } else {
-                auto max_msaa = recompui::renderer::RT64MaxMSAA();
-                preset_max_msaa = (max_msaa >= RT64::UserConfiguration::Antialiasing::MSAA4X) ? ultramodern::renderer::Antialiasing::MSAA4X :
-                    (max_msaa >= RT64::UserConfiguration::Antialiasing::MSAA2X) ? ultramodern::renderer::Antialiasing::MSAA2X :
-                    ultramodern::renderer::Antialiasing::None;
-                if (max_msaa < RT64::UserConfiguration::Antialiasing::MSAA2X) {
-                    config.update_enum_option_disabled(graphics::options::msaa_option, static_cast<uint32_t>(ultramodern::renderer::Antialiasing::MSAA2X), true);
-                }
-                if (max_msaa < RT64::UserConfiguration::Antialiasing::MSAA4X) {
-                    config.update_enum_option_disabled(graphics::options::msaa_option, static_cast<uint32_t>(ultramodern::renderer::Antialiasing::MSAA4X), true);
+                // [wcw] RT64's levels are listed in the same order as ultramodern's (None, 2X, 4X, 8X).
+                const auto max_msaa = static_cast<ultramodern::renderer::Antialiasing>(recompui::renderer::RT64MaxMSAA());
+                // The presets use up to 4X.
+                preset_max_msaa = std::min(max_msaa, ultramodern::renderer::Antialiasing::MSAA4X);
+                for (auto level : { ultramodern::renderer::Antialiasing::MSAA2X, ultramodern::renderer::Antialiasing::MSAA4X, ultramodern::renderer::Antialiasing::MSAA8X }) {
+                    if (!recompui::graphics_rules::msaa_level_supported(level, max_msaa)) {
+                        config.update_enum_option_disabled(graphics::options::msaa_option, static_cast<uint32_t>(level), true);
+                    }
                 }
             }
         }
@@ -695,7 +725,7 @@ namespace recompui {
             config.add_enum_option(
                 graphics::options::ds_option,
                 "Downsampling Quality",
-                "Renders at a higher resolution and scales it down to the output resolution for increased quality. Only available in <recomp-color primary>Original</recomp-color> and <recomp-color primary>Original 2x</recomp-color> resolution."
+                "Renders at a higher resolution and scales it down to the output resolution for increased quality. For <recomp-color primary>Original</recomp-color> and <recomp-color primary>Original 2x</recomp-color> resolution; <recomp-color primary>Auto</recomp-color> has <recomp-color primary>Supersampling</recomp-color> instead."
                 "<br />"
                 "<br />"
                 "Note: <recomp-color primary>4x</recomp-color> downsampling quality at <recomp-color primary>Original 2x</recomp-color> resolution may cause performance issues on low end devices, as it will cause the game to render <recomp-color warning>at almost 4k internal resolution</recomp-color>.",
@@ -711,7 +741,8 @@ namespace recompui {
                     }
                 );
 
-                config.add_option_disable_dependency(
+                // [wcw] Auto shows Supersampling in its place (it used to show this option disabled).
+                config.add_option_hidden_dependency(
                     graphics::options::ds_option,
                     graphics::options::res_option,
                     ultramodern::renderer::Resolution::Auto
@@ -722,6 +753,40 @@ namespace recompui {
                 });
     
                 config.on_json_serialize_option(graphics::options::ds_option, [](const recomp::config::ConfigValueVariant& value) {
+                    return nlohmann::json(std::get<uint32_t>(value));
+                });
+            }
+
+            // [wcw] Supersampling: Downsampling Quality's counterpart at Auto resolution.
+            config.add_enum_option(
+                graphics::options::ss_option,
+                "Supersampling",
+                "Renders at twice the resolution and scales it down to the window for smoother edges. Unlike MSAA, it also "
+                "smooths cut-out edges such as ropes, cages and ladders, and steadies shimmering textures."
+                "<br />"
+                "<br />"
+                "<recomp-color warning>Note:</recomp-color> <recomp-color primary>2x</recomp-color> renders four times the pixels "
+                "and is demanding at high window sizes: about 4K internally for a 1080p window. Ray tracing still traces at the window's size.",
+                supersampling_options,
+                SupersamplingOption::Off
+            );
+            {
+                config.add_option_hidden_dependency(
+                    graphics::options::ss_option,
+                    graphics::options::res_option,
+                    ultramodern::renderer::Resolution::Original,
+                    ultramodern::renderer::Resolution::Original2x
+                );
+
+                config.on_json_parse_option(graphics::options::ss_option, [](const nlohmann::json& j) {
+                    // Configs saved before this option existed have no value for it (null): use the default.
+                    if (!j.is_number_unsigned()) {
+                        return uint32_t(SupersamplingOption::Off);
+                    }
+                    return j.get<uint32_t>();
+                });
+
+                config.on_json_serialize_option(graphics::options::ss_option, [](const recomp::config::ConfigValueVariant& value) {
                     return nlohmann::json(std::get<uint32_t>(value));
                 });
             }
@@ -920,6 +985,17 @@ namespace recompui {
                     HdrPictureOption::Auto, HdrPictureOption::Brighter, HdrPictureOption::Balanced, HdrPictureOption::CrtDetail
                 );
             }
+
+            config.add_enum_option(
+                graphics::options::texture_edges_option,
+                "2D Texture Edges",
+                "How pixel-art textures (crowds, signs, the HUD, fonts) look at high resolutions. "
+                "<recomp-color primary>Original</recomp-color> keeps the N64's sharp texel blocks. "
+                "<recomp-color primary>Smooth</recomp-color> keeps every texel a crisp square but softens the edges between them "
+                "over one screen pixel, so they don't look jagged or crawl when they move.",
+                texture_edges_options,
+                TextureEdgesOption::Original
+            );
 
             config.add_enum_option(
                 graphics::options::rt_option,

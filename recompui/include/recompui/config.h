@@ -18,7 +18,9 @@ namespace recompui {
                 inline const std::string mouse_sensitivity = "mouse_sensitivity";
                 inline const std::string joystick_deadzone = "joystick_deadzone";
                 inline const std::string background_input_mode = "background_input_mode";
-        
+                // [wcw saves] An action, not a setting: picking a backup opens a confirmation (aki-roadmap#50).
+                inline const std::string restore_save_backup = "restore_save_backup";
+
                 inline const std::string debug_mode = "debug_mode";
             }
 
@@ -63,7 +65,11 @@ namespace recompui {
                 inline const std::string hpfb_option = "hpfb_option";
                 inline const std::string rr_manual_value = "rr_manual_value";
                 inline const std::string ds_option = "ds_option";
+                // [wcw] Supersampling at Auto resolution (Off / 2x).
+                inline const std::string ss_option = "ss_option";
                 // [wcw rt] Experimental hybrid ray tracing (RT64 WcwRaytracer).
+                // [wcw] Sharp bilinear for point-sampled 2D art (RT64 WcwTextureEdges).
+                inline const std::string texture_edges_option = "texture_edges_option";
                 inline const std::string rt_option = "rt_option";
                 inline const std::string rt_quality_option = "rt_quality_option";
                 // [wcw crt] CRT presentation filter (RT64 CrtFilter).

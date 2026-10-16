@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include "hle/rt64_application.h"
+#include "common/rt64_wcw_logic.h"
 #include "render/rt64_hdr_output.h"
 #include "rt64_render_hooks.h"
 #include "overloaded.h"
@@ -144,7 +145,8 @@ void set_application_user_config(RT64::Application* application, const ultramode
         default:
         case ultramodern::renderer::Resolution::Auto:
             application->userConfig.resolution = RT64::UserConfiguration::Resolution::WindowIntegerScale;
-            application->userConfig.downsampleMultiplier = 1;
+            // [wcw] Supersampling (graphics_rules.h): RT64 multiplies the window scale by this and box-filters back down.
+            application->userConfig.downsampleMultiplier = std::max(config.ds_option, 1);
             break;
         case ultramodern::renderer::Resolution::Original:
             application->userConfig.resolution = RT64::UserConfiguration::Resolution::Manual;
@@ -412,12 +414,9 @@ float renderer::RT64Context::get_resolution_scale() const {
     constexpr int ReferenceHeight = 240;
     switch (app->userConfig.resolution) {
         case RT64::UserConfiguration::Resolution::WindowIntegerScale:
-            if (app->sharedQueueResources->swapChainHeight > 0) {
-                return std::max(float((app->sharedQueueResources->swapChainHeight + ReferenceHeight - 1) / ReferenceHeight), 1.0f);
-            }
-            else {
-                return 1.0f;
-            }
+            // [wcw] The render scale, supersampling included (as Manual reports resolutionMultiplier).
+            return RT64::WcwLogic::windowResolutionMultiplier(app->sharedQueueResources->swapChainHeight, ReferenceHeight,
+                uint32_t(std::max(app->userConfig.downsampleMultiplier, 1)));
         case RT64::UserConfiguration::Resolution::Manual:
             return float(app->userConfig.resolutionMultiplier);
         case RT64::UserConfiguration::Resolution::Original:
