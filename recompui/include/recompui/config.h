@@ -64,6 +64,8 @@ namespace recompui {
                 inline const std::string rr_manual_value = "rr_manual_value";
                 inline const std::string ds_option = "ds_option";
                 // [wcw rt] Experimental hybrid ray tracing (RT64 WcwRaytracer).
+                // [wcw] Sharp bilinear for point-sampled 2D art (RT64 WcwTextureEdges).
+                inline const std::string texture_edges_option = "texture_edges_option";
                 inline const std::string rt_option = "rt_option";
                 inline const std::string rt_quality_option = "rt_quality_option";
                 // [wcw crt] CRT presentation filter (RT64 CrtFilter).
