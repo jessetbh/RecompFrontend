@@ -5,12 +5,14 @@
 
 #include "hle/rt64_application.h"
 #include "common/rt64_wcw_logic.h"
+#include "common/rt64_wcw_perf.h"
 #include "render/rt64_hdr_output.h"
 #include "rt64_render_hooks.h"
 #include "overloaded.h"
 
 #include "ultramodern/ultramodern.hpp"
 #include "ultramodern/config.hpp"
+#include "ultramodern/perf.hpp"
 
 #include "renderer.h"
 #include "recompui/recompui.h"
@@ -223,6 +225,11 @@ ultramodern::renderer::GraphicsApi map_graphics_api(RT64::UserConfiguration::Gra
 renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, ultramodern::renderer::PresentationMode presentation_mode, bool debug) {
     static unsigned char dummy_rom_header[0x40];
     recompui::set_render_hooks();
+
+    // [wcw perf] WCW_PERF_LOG=1: ultramodern's game-side CPU phases go to rt64's wcw_cpu_phases.csv.
+    if (RT64::WcwPerf::enabled()) {
+        ultramodern::perf::set_phase_sink(&RT64::WcwPerf::cpuPhaseNs);
+    }
 
     // Set up the RT64 application core fields.
     RT64::Application::Core appCore{};
