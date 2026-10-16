@@ -254,3 +254,18 @@ TEST_CASE("Max on a 60 Hz display matches at the smooth rate, not at 120") {
     s.framerate = RefreshRate::Display;
     CHECK_EQ(val(matching_preset(s, limits)), val(Preset::Custom));
 }
+
+TEST_CASE("the preset labels are the short ones, so the row fits on one line") {
+    CHECK(std::string(label(Preset::Authentic)) == "Authentic");
+    CHECK(std::string(label(Preset::Enhanced)) == "Enhanced");
+    CHECK(std::string(label(Preset::EnhancedRayTracing)) == "Enhanced RT");
+    CHECK(std::string(label(Preset::Max)) == "Max");
+    CHECK(std::string(label(Preset::Custom)) == "Custom");
+    // "Enhanced Ray Tracing" wrapped onto two lines in the menu.
+    size_t total = 0;
+    for (Preset p : { Preset::Authentic, Preset::Enhanced, Preset::EnhancedRayTracing, Preset::Max, Preset::Custom }) {
+        CHECK(std::string(label(p)).size() <= 11);
+        total += std::string(label(p)).size();
+    }
+    CHECK(total <= 40);
+}

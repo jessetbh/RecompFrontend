@@ -83,4 +83,20 @@ namespace recompui::config::presets {
 
         return Preset::Custom;
     }
+
+    const char *label(Preset preset) {
+        switch (preset) {
+        case Preset::Authentic:
+            return "Authentic";
+        case Preset::Enhanced:
+            return "Enhanced";
+        case Preset::EnhancedRayTracing:
+            return "Enhanced RT";
+        case Preset::Max:
+            return "Max";
+        case Preset::Custom:
+        default:
+            return "Custom";
+        }
+    }
 };

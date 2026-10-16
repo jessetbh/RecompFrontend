@@ -178,9 +178,11 @@ void ConfigOptionEnum::update_enum_disabled() {
     bool all_disabled = get_disabled();
     auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
     for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
-        bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
         auto opt_element = radio->get_option_element(i);
-        opt_element->set_enabled(!enum_disabled);
+        opt_element->set_enabled(!all_disabled);
+        // [wcw] A disabled value of an enabled option is locked rather than disabled: it can't be picked, but when it is
+        // the current value (the graphics preset's Custom) it still shows as the selected one (radio_rules.h).
+        opt_element->set_locked(config->get_enum_option_disabled(option_index, i));
     }
 };
 
@@ -300,5 +302,70 @@ void ConfigOptionBool::update_disabled() {
     bool disabled = get_disabled();
     toggle->set_enabled(!disabled);
 };
+
+// ReportingButton
+ReportingButton::ReportingButton(ResourceId rid, Element *parent, const std::string &text, ButtonStyle style, ButtonSize size) :
+    Button(rid, parent, text, style, size) {}
+
+void ReportingButton::process_event(const Event &e) {
+    Button::process_event(e);
+    switch (e.type) {
+    case EventType::Focus:
+        if (std::get<EventFocus>(e.variant).active) {
+            scroll_into_view();
+            if (on_attention) {
+                on_attention();
+            }
+        }
+        break;
+    case EventType::Hover:
+        if (std::get<EventHover>(e.variant).active && on_attention) {
+            on_attention();
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+// ConfigActionElement
+ConfigActionElement::ConfigActionElement(ResourceId rid, Element *parent, const config::ConfigTabAction &action, std::function<void()> on_hover) :
+    Element(rid, parent, Events(EventType::Hover), "div", false),
+    on_hover(std::move(on_hover))
+{
+    set_display(Display::Flex);
+    set_position(Position::Relative);
+    set_flex_direction(FlexDirection::Column);
+    set_align_items(AlignItems::FlexStart);
+    set_justify_content(JustifyContent::FlexStart);
+    set_padding_top(config_option_element_margin_vertical);
+    set_padding_left(12.0f);
+    set_padding_right(12.0f);
+    set_padding_bottom(config_option_element_margin_vertical);
+    set_height_auto();
+    set_width(100.0f, Unit::Percent);
+    set_as_navigation_container(NavigationType::Auto);
+
+    ContextId context = recompui::get_current_context();
+    Label *name_label = context.create_element<Label>(this, action.name, theme::Typography::LabelMD);
+    name_label->set_margin_bottom(12.0f);
+
+    button = context.create_element<ReportingButton>(this, action.button_label, ButtonStyle::Secondary, ButtonSize::Medium);
+    button->set_white_space(WhiteSpace::Nowrap);
+    button->set_flex_shrink(0.0f);
+    button->set_attention_callback(this->on_hover);
+    std::function<void()> on_pressed = action.on_pressed;
+    button->add_pressed_callback([on_pressed]() {
+        if (on_pressed) {
+            on_pressed();
+        }
+    });
+}
+
+void ConfigActionElement::process_event(const Event &e) {
+    if (e.type == EventType::Hover && std::get<EventHover>(e.variant).active && on_hover) {
+        on_hover();
+    }
+}
 
 } // namespace recompui

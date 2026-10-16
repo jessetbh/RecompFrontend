@@ -357,11 +357,11 @@ namespace recompui {
         static bool syncing_preset = false;
 
         static EnumOptionVector preset_options = {
-            {presets::Preset::Authentic, "Authentic", "Authentic"},
-            {presets::Preset::Enhanced, "Enhanced", "Enhanced"},
-            {presets::Preset::EnhancedRayTracing, "EnhancedRayTracing", "Enhanced Ray Tracing"},
-            {presets::Preset::Max, "Max", "Max"},
-            {presets::Preset::Custom, "Custom", "Custom"},
+            {presets::Preset::Authentic, "Authentic", presets::label(presets::Preset::Authentic)},
+            {presets::Preset::Enhanced, "Enhanced", presets::label(presets::Preset::Enhanced)},
+            {presets::Preset::EnhancedRayTracing, "EnhancedRayTracing", presets::label(presets::Preset::EnhancedRayTracing)},
+            {presets::Preset::Max, "Max", presets::label(presets::Preset::Max)},
+            {presets::Preset::Custom, "Custom", presets::label(presets::Preset::Custom)},
         };
 
         // The options a preset sets.
@@ -682,20 +682,26 @@ namespace recompui {
             config.add_enum_option(
                 graphics::options::preset,
                 "Preset",
-                "Sets the main graphics options in one go; you can still change any of them afterwards. "
-                "<recomp-color primary>Authentic</recomp-color>: the game as it shipped, in 4:3 at 30 fps on a simulated composite TV (the CRT filter). "
-                "<recomp-color primary>Enhanced</recomp-color> (the default): widescreen, smooth motion (60 fps where the game offers it) and MSAA 4x, without ray tracing. "
-                "<recomp-color primary>Enhanced Ray Tracing</recomp-color>: Enhanced with ray-traced shadows and ambient occlusion (Balanced). "
-                "<recomp-color primary>Max</recomp-color>: Enhanced Ray Tracing at 120 fps on a 120 Hz or faster display, with Ultra ray tracing and HDR (Auto). "
-                "<recomp-color primary>Custom</recomp-color> shows when the options match none of these."
+                "Sets the main graphics options in one go; you can still change any of them afterwards."
                 "<br />"
                 "<br />"
-                "<recomp-color primary>Ray tracing needs an RTX-class GPU with D3D12, and HDR needs Windows HDR and a restart of the game; without them those parts have no effect.</recomp-color>",
+                "<recomp-color primary>Authentic</recomp-color>: 4:3, 30 fps, CRT filter."
+                "<br />"
+                "<recomp-color primary>Enhanced</recomp-color> (default): widescreen, smooth motion, MSAA 4x."
+                "<br />"
+                "<recomp-color primary>Enhanced RT</recomp-color>: Enhanced plus ray tracing (Balanced)."
+                "<br />"
+                "<recomp-color primary>Max</recomp-color>: Ultra ray tracing, HDR, 120 fps on a fast display."
+                "<br />"
+                "<recomp-color primary>Custom</recomp-color>: your own mix (shown when no preset matches)."
+                "<br />"
+                "<br />"
+                "Ray tracing needs an RTX-class GPU with D3D12; HDR needs Windows HDR and a game restart.",
                 preset_options,
                 presets::Preset::Enhanced
             );
             {
-                // Custom is only ever shown, never picked.
+                // Custom is only ever shown, never picked: a locked value (radio_rules.h), drawn as selected when current.
                 config.update_enum_option_disabled(graphics::options::preset, static_cast<uint32_t>(presets::Preset::Custom), true);
                 config.add_option_change_callback(
                     graphics::options::preset,

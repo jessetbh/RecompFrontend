@@ -98,4 +98,8 @@ namespace recompui::config::presets {
 
     // The first preset the options match, or Custom.
     Preset matching_preset(const Settings &current, const Limits &limits);
+
+    // The preset's name in the menu, short enough for all five to fit on one row: Authentic / Enhanced / Enhanced RT /
+    // Max / Custom.
+    const char *label(Preset preset);
 };

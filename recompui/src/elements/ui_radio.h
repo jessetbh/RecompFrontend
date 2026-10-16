@@ -13,6 +13,11 @@ namespace recompui {
         std::function<void(uint32_t)> pressed_callback = nullptr;
         std::function<void(bool)> focus_callback = nullptr;
         uint32_t index = 0;
+        // [wcw] Inputs of radio_rules::option_state.
+        bool enabled_state = true;
+        bool locked = false;
+        bool checked = false;
+        void refresh_state();
     protected:
         virtual void process_event(const Event &e) override;
         std::string_view get_type_name() override { return "LabelRadioOption"; }
@@ -21,6 +26,8 @@ namespace recompui {
         void set_pressed_callback(std::function<void(uint32_t)> callback);
         void set_focus_callback(std::function<void(bool)> callback);
         void set_selected_state(bool enable);
+        // [wcw] A locked value can be shown but not picked (radio_rules.h).
+        void set_locked(bool locked);
     };
 
     class Radio : public Container {
