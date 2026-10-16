@@ -3,6 +3,7 @@
 #include <variant>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <thread>
 
 #include "SDL.h"
@@ -370,18 +371,42 @@ void renderer::RT64Context::send_dummy_workload(uint32_t fb_address) {
 
 void renderer::RT64Context::update_screen() {
     // [wcw] The GPU device was lost (a GPU hang or removal; the D3D12 backend logged why). Rendering can't continue:
-    // tell the player and quit through the normal shutdown (saves flush), instead of crashing in several renderer
-    // threads at once. The backend hands out scratch memory meanwhile, so nothing writes through null.
+    // RT64's threads stop touching the GPU, and this tells the player and quits through the normal shutdown (saves
+    // flush), instead of crashing in several renderer threads at once. The quit doesn't wait on the message forever
+    // (RT64::WcwLogic::DeviceLossQuit): nobody may be there to close it.
     static std::atomic<bool> device_lost_handled = false;
     if (plume::wcwDeviceLostFlag().load() && !device_lost_handled.exchange(true)) {
         fprintf(stderr, "[wcw] graphics device lost: quitting\n");
         fflush(stderr);
         std::thread([]() {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Graphics device lost",
-                "The graphics card stopped responding (the GPU was reset), so the game has to close.\n\n"
-                "Your saves are kept. If this keeps happening, try lowering the Ray Tracing quality or the framerate.",
-                nullptr);
-            ultramodern::quit();
+            static std::atomic<bool> message_closed = false;
+            RT64::WcwLogic::DeviceLossQuit device_loss_quit;
+            auto seconds_now = []() {
+                return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            };
+
+            while (true) {
+                switch (device_loss_quit.update(true, seconds_now(), message_closed.load())) {
+                case RT64::WcwLogic::DeviceLossQuit::Action::ShowMessage:
+                    std::thread([]() {
+                        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Graphics device lost",
+                            "The graphics card stopped responding (the GPU was reset), so the game has to close.\n\n"
+                            "Your saves are kept. If this keeps happening, try lowering the Ray Tracing quality or the framerate.",
+                            nullptr);
+                        message_closed = true;
+                    }).detach();
+                    break;
+                case RT64::WcwLogic::DeviceLossQuit::Action::Quit:
+                    fprintf(stderr, "[wcw] graphics device lost: %s, shutting down\n", message_closed.load() ? "message closed" : "no answer to the message");
+                    fflush(stderr);
+                    ultramodern::quit();
+                    return;
+                default:
+                    break;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
         }).detach();
     }
 
