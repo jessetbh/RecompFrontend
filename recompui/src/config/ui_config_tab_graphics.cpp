@@ -657,6 +657,10 @@ namespace recompui {
                 );
 
                 config.on_json_parse_option(graphics::options::ss_option, [](const nlohmann::json& j) {
+                    // Configs saved before this option existed have no value for it (null): use the default.
+                    if (!j.is_number_unsigned()) {
+                        return uint32_t(SupersamplingOption::Off);
+                    }
                     return j.get<uint32_t>();
                 });
 
