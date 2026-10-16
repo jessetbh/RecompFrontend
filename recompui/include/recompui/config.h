@@ -18,7 +18,9 @@ namespace recompui {
                 inline const std::string mouse_sensitivity = "mouse_sensitivity";
                 inline const std::string joystick_deadzone = "joystick_deadzone";
                 inline const std::string background_input_mode = "background_input_mode";
-        
+                // [wcw saves] An action, not a setting: picking a backup opens a confirmation (aki-roadmap#50).
+                inline const std::string restore_save_backup = "restore_save_backup";
+
                 inline const std::string debug_mode = "debug_mode";
             }
 
