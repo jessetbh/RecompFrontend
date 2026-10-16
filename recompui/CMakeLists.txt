@@ -123,17 +123,28 @@ target_link_libraries(recompui PUBLIC
     miniz
 )
 
-# [wcw] Unit tests for the Framerate option's rules (tests/). They build and run as part of every recompui build, so a
-# failing test fails the game's build. RECOMPUI_WCW_TESTS=OFF skips them.
+# [wcw] Unit tests for the Framerate, resolution and MSAA options' rules, the graphics presets, the save backup list and
+# radio options' states (tests/). They build and run as part of every recompui build, so a failing test fails the game's
+# build. RECOMPUI_WCW_TESTS=OFF skips them.
 option(RECOMPUI_WCW_TESTS "Build and run the wcw unit tests with recompui" ON)
 if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
     add_executable(recompui_wcw_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/framerate_rules_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/framerate_rules.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/graphics_rules_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/graphics_rules.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/graphics_presets_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/graphics_presets.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/save_backup_menu_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/save_backup_menu.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/radio_rules_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/elements/radio_rules.cpp
     )
     target_include_directories(recompui_wcw_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/elements
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${RECOMP_FRONTEND_N64MODERNRUNTIME_PATH}/librecomp/include
         ${RECOMP_FRONTEND_N64MODERNRUNTIME_PATH}/ultramodern/include
         ${RECOMP_FRONTEND_N64MODERNRUNTIME_PATH}/thirdparty
     )

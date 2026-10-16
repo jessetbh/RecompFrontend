@@ -1,6 +1,8 @@
 #include "librecomp/config.hpp"
 #include "recompui/config.h"
+#include "recompui/recompui.h"
 #include "util/steam_deck.h"
+#include "composites/ui_save_backups_modal.h"
 
 namespace recompui {
 
@@ -138,6 +140,15 @@ namespace config {
             background_input_options,
             BackgroundInputMode::On
         );
+
+        // [wcw saves] Restore a backup (aki-roadmap#50): a button that opens the backup list, not a setting.
+        add_config_tab_action(general::id, ConfigTabAction{
+            .name = "Restore Save Backup",
+            .description = "Your saves are backed up automatically when the game starts and while you play. "
+                "Pick a backup by its date to restore it the next time the game starts.",
+            .button_label = "Restore a backup...",
+            .on_pressed = open_save_backups_modal,
+        });
 
         return config;
     }

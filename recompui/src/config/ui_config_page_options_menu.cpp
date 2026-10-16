@@ -7,10 +7,12 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
     ResourceId rid,
     Element *parent,
     recomp::config::Config *config,
-    bool is_internal
+    bool is_internal,
+    std::vector<config::ConfigTabAction> actions
 ) : ConfigPage(rid, parent, Events(EventType::Hover, EventType::Update, EventType::MenuAction)),
     config(config),
-    is_internal(is_internal)
+    is_internal(is_internal),
+    actions(std::move(actions))
 {
     ContextId context = recompui::get_current_context();
     set_as_navigation_container(NavigationType::Vertical);
@@ -237,6 +239,19 @@ void ConfigPageOptionsMenu::render_config_options() {
             element->update_hidden();
             config_option_elements.push_back(element);
         }
+
+        render_actions(body_left_scroll);
+    }
+}
+
+void ConfigPageOptionsMenu::render_actions(Element *parent) {
+    ContextId context = recompui::get_current_context();
+    for (const config::ConfigTabAction &action : actions) {
+        const std::string description = action.description;
+        context.create_element<ConfigActionElement>(parent, action, [this, description]() {
+            this->description_option_id = "";
+            this->set_description_text(description);
+        });
     }
 }
 

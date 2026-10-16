@@ -1,6 +1,7 @@
 #include "overloaded.h"
 #include "ui_radio.h"
 #include "ui_utils.h"
+#include "radio_rules.h"
 
 namespace recompui {
 
@@ -46,29 +47,36 @@ namespace recompui {
     void RadioOption::set_selected_state(bool enable) {
         set_style_enabled(checked_state, enable);
         set_as_primary_focus(enable);
+        checked = enable;
+        refresh_state();
+    }
+
+    void RadioOption::set_locked(bool locked) {
+        this->locked = locked;
+        refresh_state();
+    }
+
+    void RadioOption::refresh_state() {
+        const radio_rules::OptionState state = radio_rules::option_state(enabled_state, locked, checked);
+        set_style_enabled(disabled_state, state.looks_disabled);
+        set_cursor(state.pickable ? Cursor::Pointer : Cursor::None);
+        set_focusable(state.focusable);
     }
 
     void RadioOption::process_event(const Event &e) {
         switch (e.type) {
         case EventType::Click:
-            pressed_callback(index);
+            if (radio_rules::option_state(enabled_state, locked, checked).pickable) {
+                pressed_callback(index);
+            }
             break;
         case EventType::Hover:
             set_style_enabled(hover_state, std::get<EventHover>(e.variant).active);
             break;
-        case EventType::Enable: {
-            bool enable_active = std::get<EventEnable>(e.variant).active;
-            set_style_enabled(disabled_state, !enable_active);
-            if (enable_active) {
-                set_cursor(Cursor::Pointer);
-                set_focusable(true);
-            }
-            else {
-                set_cursor(Cursor::None);
-                set_focusable(false);
-            }
+        case EventType::Enable:
+            enabled_state = std::get<EventEnable>(e.variant).active;
+            refresh_state();
             break;
-        }
         case EventType::Focus:
             {
                 bool active = std::get<EventFocus>(e.variant).active;

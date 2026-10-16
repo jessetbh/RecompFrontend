@@ -15,6 +15,8 @@ struct PendingTab {
     bool hidden = false;
 };
 static std::vector<PendingTab> pending_tabs;
+// [wcw] Button rows of the config tabs (config::add_config_tab_action), by config ID.
+static std::vector<std::pair<std::string, recompui::config::ConfigTabAction>> tab_actions;
 static bool loaded_configs = false;
 
 namespace recompui {
@@ -64,7 +66,13 @@ namespace recompui {
             id,
             // Create contents
             [id](recompui::ContextId context, Element* parent) {
-                context.create_element<ConfigPageOptionsMenu>(parent, get_config_ptr(id), true);
+                std::vector<config::ConfigTabAction> actions;
+                for (const auto &[config_id, action] : tab_actions) {
+                    if (config_id == id) {
+                        actions.push_back(action);
+                    }
+                }
+                context.create_element<ConfigPageOptionsMenu>(parent, get_config_ptr(id), true, std::move(actions));
             },
             // Can close
             [id, name](TabCloseContext close_context) {
@@ -105,6 +113,10 @@ namespace recompui {
             }
         );
         return new_config;
+    }
+
+    void config::add_config_tab_action(const std::string &config_id, ConfigTabAction action) {
+        tab_actions.emplace_back(config_id, std::move(action));
     }
 
     void config::finalize() {

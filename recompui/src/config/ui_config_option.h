@@ -7,6 +7,8 @@
 #include "elements/ui_text_input.h"
 #include "elements/ui_slider.h"
 #include "elements/ui_toggle.h"
+#include "elements/ui_button.h"
+#include "recompui/config.h"
 
 namespace recompui {
     using set_option_value_t = std::function<void(const std::string &option_id, recomp::config::ConfigValueVariant value)>;
@@ -127,6 +129,29 @@ public:
 
     void update_value() override;
     void update_disabled() override;
+};
+
+// [wcw] A button that reports when it gets focus or the mouse, and scrolls itself into view on focus (config tab
+// actions, the save backup list).
+class ReportingButton : public Button {
+protected:
+    std::function<void()> on_attention = nullptr;
+    void process_event(const Event &e) override;
+    std::string_view get_type_name() override { return "ReportingButton"; }
+public:
+    ReportingButton(ResourceId rid, Element *parent, const std::string &text, ButtonStyle style, ButtonSize size = ButtonSize::Default);
+    void set_attention_callback(std::function<void()> callback) { on_attention = std::move(callback); }
+};
+
+// [wcw] A config tab action (config::add_config_tab_action): its name over a button, laid out like an option.
+class ConfigActionElement : public Element {
+protected:
+    ReportingButton *button = nullptr;
+    std::function<void()> on_hover;
+    void process_event(const Event &e) override;
+    std::string_view get_type_name() override { return "ConfigActionElement"; }
+public:
+    ConfigActionElement(ResourceId rid, Element *parent, const config::ConfigTabAction &action, std::function<void()> on_hover);
 };
 
 } // namespace recompui

@@ -18,7 +18,7 @@ namespace recompui {
                 inline const std::string mouse_sensitivity = "mouse_sensitivity";
                 inline const std::string joystick_deadzone = "joystick_deadzone";
                 inline const std::string background_input_mode = "background_input_mode";
-        
+
                 inline const std::string debug_mode = "debug_mode";
             }
 
@@ -51,6 +51,8 @@ namespace recompui {
     
             namespace options {
                 inline const std::string developer_mode = "developer_mode";
+                // [wcw] Graphics presets (src/config/graphics_presets.h).
+                inline const std::string preset = "graphics_preset";
                 inline const std::string res_option = "res_option";
                 inline const std::string wm_option = "wm_option";
                 inline const std::string hr_option = "hr_option";
@@ -61,7 +63,11 @@ namespace recompui {
                 inline const std::string hpfb_option = "hpfb_option";
                 inline const std::string rr_manual_value = "rr_manual_value";
                 inline const std::string ds_option = "ds_option";
+                // [wcw] Supersampling at Auto resolution (Off / 2x).
+                inline const std::string ss_option = "ss_option";
                 // [wcw rt] Experimental hybrid ray tracing (RT64 WcwRaytracer).
+                // [wcw] Sharp bilinear for point-sampled 2D art (RT64 WcwTextureEdges).
+                inline const std::string texture_edges_option = "texture_edges_option";
                 inline const std::string rt_option = "rt_option";
                 inline const std::string rt_quality_option = "rt_quality_option";
                 // [wcw crt] CRT presentation filter (RT64 CrtFilter).
@@ -111,6 +117,23 @@ namespace recompui {
          * @param requires_confirmation  Whether the tab requires confirmation before closing. Adds an Apply button at the footer, and if the user tries to switch tabs or close the modal, they will be prompted to confirm or cancel changes.
          */
         recomp::config::Config &create_config_tab(const std::string &name, const std::string &id, bool requires_confirmation);
+
+        /**
+         * @brief [wcw] A button row at the bottom of a tab made with create_config_tab, for something the player does
+         * rather than sets (General > Restore a Backup). It shows a name and a button like an option's, and its
+         * description in the tab's description panel.
+         */
+        struct ConfigTabAction {
+            std::string name;
+            std::string description;
+            std::string button_label;
+            std::function<void()> on_pressed;
+        };
+
+        /**
+         * @brief [wcw] Adds an action to the tab of the config with this ID (after its options, in the order added).
+         */
+        void add_config_tab_action(const std::string &config_id, ConfigTabAction action);
 
         /**
          * @brief Adds a new tab to the config modal. This is for manually rendering your own tab's UI.
