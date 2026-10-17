@@ -1023,8 +1023,8 @@ namespace recompui {
                 "<recomp-color primary>Performance</recomp-color> traces at reduced resolution with the fewest rays and skips ambient occlusion. "
                 "<recomp-color primary>Balanced</recomp-color> traces at reduced resolution and adds soft ambient occlusion where surfaces meet "
                 "(under arms, between the legs, where wrestlers touch the mat). "
-                "<recomp-color primary>Quality</recomp-color> traces every pixel for sharper shadows and deeper ambient occlusion. "
-                "<recomp-color primary>Ultra</recomp-color> keeps Quality's look with twice the rays, for the cleanest result; "
+                "<recomp-color primary>Quality</recomp-color> traces every pixel up to 1440p (at 4K, two thirds of the lines) for sharper shadows and deeper ambient occlusion. "
+                "<recomp-color primary>Ultra</recomp-color> keeps Quality's look with twice the rays and traces every pixel at any resolution, for the cleanest result; "
                 "it costs the most and suits fast GPUs.",
                 ray_tracing_quality_options,
                 enhanced.rt_quality
