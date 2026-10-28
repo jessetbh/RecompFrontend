@@ -15,6 +15,7 @@ TEST_CASE("pack ids are what the mod accepts") {
     CHECK(!valid_pack_id("a b"));
     CHECK(!valid_pack_id("../x"));
     CHECK(!valid_pack_id(std::string(32, 'a')));
+    CHECK(!valid_pack_id("off"));   // the mod's off keyword
     CHECK(valid_pack_id(std::string(31, 'a')));
 }
 
@@ -29,12 +30,22 @@ TEST_CASE("slots read like the mod reads them") {
     CHECK_EQ(pack_slot(text + "off banjo\n", "banjo"), 0);   // turned off
     CHECK(slot_pack(text + "off banjo\n", 2) == "");
     CHECK_EQ(pack_slot("snake slot 5\nsnake slot 0\nsnake slot\n", "snake"), 0);   // not slots 1-4
+    CHECK_EQ(pack_slot("snake slot 01\n", "snake"), 1);   // numbers as the mod reads them
+    CHECK_EQ(pack_slot("snake slot 0x2\n", "snake"), 2);
+}
+
+TEST_CASE("a slot's first line decides, even when its pack is off (the mod doesn't look further)") {
+    const std::string text = "a slot 1\nb slot 1\noff a\n";
+    CHECK(slot_pack(text, 1) == "");
+    CHECK_EQ(pack_slot(text, "b"), 0);
+    CHECK_EQ(pack_slot("a slot 1\nb slot 1\n", "b"), 0);   // slot 1 is a's
+    CHECK_EQ(pack_slot("a slot 1\na slot 2\n", "a"), 1);
 }
 
 TEST_CASE("assigning a slot moves the pack and takes the slot from the other pack") {
     const std::string text = "# keep me\nsnake slot 1\nbanjo slot 2\ncesium wrestler 0x0302 costume 0\n";
     const std::string moved = assign(text, "snake", 2);
-    CHECK(moved == "# keep me\ncesium wrestler 0x0302 costume 0\nsnake slot 2\n");
+    CHECK(moved == "# keep me\nsnake slot 2\ncesium wrestler 0x0302 costume 0\n");   // where the old line was
     CHECK_EQ(pack_slot(moved, "snake"), 2);
     CHECK_EQ(pack_slot(moved, "banjo"), 0);
     CHECK(slot_pack(moved, 1) == "");
@@ -57,7 +68,8 @@ TEST_CASE("a pack turned off with an off line comes back on when given a slot") 
 TEST_CASE("an empty or new file, a BOM, CR line ends and a missing last line end") {
     CHECK(assign("", "snake", 1) == "snake slot 1\n");
     CHECK(assign("\xEF\xBB\xBFsnake slot 1", "banjo", 2) == "snake slot 1\nbanjo slot 2\n");
-    CHECK(assign("a slot 1\rb slot 2\r", "c", 1) == "b slot 2\nc slot 1\n");
+    CHECK(assign("a slot 1\rb slot 2\r", "c", 1) == "c slot 1\nb slot 2\n");
+    CHECK(assign("snake slot 01\nx wrestler 3\n", "banjo", 1) == "banjo slot 1\nx wrestler 3\n");   // 01 is slot 1
 }
 
 TEST_CASE("pack.json fields, with the id as the fallback name") {

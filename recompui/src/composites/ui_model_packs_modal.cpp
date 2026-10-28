@@ -23,6 +23,7 @@ namespace recompui {
     static Element *return_focus = nullptr;
     // Preview textures queued for the rows shown now, released when the dialog refills or closes.
     static std::vector<std::string> previews;
+    static unsigned preview_generation = 0;   // in the texture names: the image cache never replaces a name
     // The rows shown now. A choice updates them in place: rebuilding the list from a button's own callback would
     // destroy that button while it runs.
     struct RowWidgets {
@@ -52,7 +53,9 @@ namespace recompui {
                 return false;
             }
             file << text;
-            if (!file) {
+            file.close();   // the buffered data is written here: check it before replacing the file
+            if (file.fail()) {
+                std::filesystem::remove(tmp, ec);
                 return false;
             }
         }
@@ -132,6 +135,7 @@ namespace recompui {
     // to focus (the first row's current choice).
     static Element *fill_modal(ContextId context) {
         release_previews();
+        preview_generation++;
         row_widgets.clear();
 
         Element *header_left = packs_modal->get_header()->get_left();
@@ -171,7 +175,8 @@ namespace recompui {
         }
 
         Label *hint = context.create_element<Label>(column,
-            "Pick the wrestler slot each pack replaces. Changes apply at the start of the next match.", theme::Typography::Body);
+            "Pick the wrestler slot each pack replaces. Changes apply at the start of the next match. A Slot N pack set in "
+            "the mod's Configure options takes priority over this list.", theme::Typography::Body);
         hint->set_color(theme::color::TextDim);
 
         const std::vector<menu::Row> rows = menu::rows(shown_packs, read_text(models_directory() / "models.txt"));
@@ -205,7 +210,7 @@ namespace recompui {
             image->set_background_color(theme::color::BGOverlay);
             const std::string png = read_text(models_directory() / (row.pack.id + ".akimodel") / "preview.png");
             if (!png.empty()) {
-                const std::string src = "?/models/" + row.pack.id + "/preview";
+                const std::string src = "?/models/" + row.pack.id + "/preview/" + std::to_string(preview_generation);
                 recompui::queue_image_from_bytes_file(src, std::vector<char>(png.begin(), png.end()));
                 previews.push_back(src);
                 image->set_src(src);

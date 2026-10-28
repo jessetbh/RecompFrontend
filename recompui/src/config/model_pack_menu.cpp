@@ -6,7 +6,7 @@
 
 namespace recompui::config::model_pack_menu {
     bool valid_pack_id(std::string_view id) {
-        if (id.empty() || id.size() > 31) {
+        if (id.empty() || id.size() > 31 || id == "off") {   // "off" starts the mod's off lines
             return false;
         }
         for (char c : id) {
@@ -66,16 +66,48 @@ namespace recompui::config::model_pack_menu {
         return out;
     }
 
-    // "<pack> slot N" with N 1-4: N, else 0.
+    // A number as the mod's parse_int reads it: decimal, or hex after 0x; -1 when it isn't one (or is out of range).
+    static long parse_number(const std::string &s) {
+        size_t i = 0;
+        bool neg = false;
+        if (i < s.size() && s[i] == '-') {
+            neg = true;
+            i++;
+        }
+        int base = 10;
+        if (i + 1 < s.size() && s[i] == '0' && (s[i + 1] == 'x' || s[i + 1] == 'X')) {
+            base = 16;
+            i += 2;
+        }
+        if (i >= s.size()) {
+            return -1;
+        }
+        long v = 0;
+        for (; i < s.size(); i++) {
+            const char c = s[i];
+            int d = (c >= '0' && c <= '9') ? c - '0' : (base == 16 && c >= 'a' && c <= 'f') ? c - 'a' + 10
+                  : (base == 16 && c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
+            if (d < 0 || d >= base || v > 0xFFFFFF) {
+                return -1;
+            }
+            v = v * base + d;
+        }
+        return neg ? -v : v;
+    }
+
+    // "<pack> slot N" with N 1-4 (as the mod reads N): N, else 0.
     static int slot_of_line(const std::vector<std::string> &w, std::string *pack = nullptr) {
-        if (w.size() != 3 || w[1] != "slot" || !valid_pack_id(w[0]) || w[2].size() != 1 || w[2][0] < '1' ||
-            w[2][0] > '0' + slot_count) {
+        if (w.size() != 3 || w[1] != "slot" || !valid_pack_id(w[0])) {
+            return 0;
+        }
+        const long n = parse_number(w[2]);
+        if (n < 1 || n > slot_count) {
             return 0;
         }
         if (pack != nullptr) {
             *pack = w[0];
         }
-        return w[2][0] - '0';
+        return int(n);
     }
 
     static bool is_off_line(const std::vector<std::string> &w, std::string_view pack_id) {
@@ -91,47 +123,52 @@ namespace recompui::config::model_pack_menu {
         return false;
     }
 
-    int pack_slot(const std::string &text, std::string_view pack_id) {
-        const std::vector<std::string> lines = split_lines(text);
-        if (pack_is_off(lines, pack_id)) {
-            return 0;
-        }
+    // The mod's pack_for_slot for slot lines: the first line for the slot decides; if its pack is off, the slot is
+    // empty (the mod doesn't look further).
+    static std::string slot_pack_of(const std::vector<std::string> &lines, int slot) {
         for (const std::string &line : lines) {
             std::string pack;
-            const int slot = slot_of_line(words(line), &pack);
-            if (slot != 0 && pack == pack_id) {
+            if (slot_of_line(words(line), &pack) == slot) {
+                return pack_is_off(lines, pack) ? std::string() : pack;
+            }
+        }
+        return "";
+    }
+
+    std::string slot_pack(const std::string &text, int slot) {
+        return slot_pack_of(split_lines(text), slot);
+    }
+
+    int pack_slot(const std::string &text, std::string_view pack_id) {
+        const std::vector<std::string> lines = split_lines(text);
+        for (int slot = 1; slot <= slot_count; slot++) {
+            if (slot_pack_of(lines, slot) == pack_id) {
                 return slot;
             }
         }
         return 0;
     }
 
-    std::string slot_pack(const std::string &text, int slot) {
-        const std::vector<std::string> lines = split_lines(text);
-        for (const std::string &line : lines) {
-            std::string pack;
-            if (slot_of_line(words(line), &pack) == slot && !pack_is_off(lines, pack)) {
-                return pack;
-            }
-        }
-        return "";
-    }
-
     std::string assign(const std::string &text, std::string_view pack_id, int slot) {
+        const std::string line_for_pack = std::string(pack_id) + " slot " + std::to_string(slot) + "\n";
         std::string out;
+        bool placed = (slot == 0);
         for (const std::string &line : split_lines(text)) {
             const std::vector<std::string> w = words(line);
             std::string pack;
             const int line_slot = slot_of_line(w, &pack);
-            const bool drop = (line_slot != 0 && (pack == pack_id || (slot != 0 && line_slot == slot))) ||
-                (slot != 0 && is_off_line(w, pack_id));
-            if (!drop) {
+            const bool slot_line = line_slot != 0 && (pack == pack_id || (slot != 0 && line_slot == slot));
+            if (slot_line && !placed) {
+                out += line_for_pack;   // where the line it replaces was
+                placed = true;
+            }
+            if (!slot_line && !(slot != 0 && is_off_line(w, pack_id))) {
                 out += line;
                 out += "\n";
             }
         }
-        if (slot != 0) {
-            out += std::string(pack_id) + " slot " + std::to_string(slot) + "\n";
+        if (!placed) {
+            out += line_for_pack;
         }
         return out;
     }
