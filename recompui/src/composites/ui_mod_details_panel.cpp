@@ -1,6 +1,7 @@
 #include "ui_mod_details_panel.h"
 
 #include "librecomp/mods.hpp"
+#include "ui_model_packs_modal.h"
 
 namespace recompui {
 
@@ -71,7 +72,16 @@ ModDetailsPanel::ModDetailsPanel(ResourceId rid, Element *parent) : Element(rid,
             enable_label->set_color(theme::color::Primary);
         }
 
-        configure_button = context.create_element<Button>(buttons_container, "Configure", recompui::ButtonStyle::Secondary);
+        // [wcw model import] The model packs dialog, shown only on the aki_modelimport mod's page (set_mod_details).
+        Container *right_buttons = context.create_element<Container>(buttons_container, FlexDirection::Row, JustifyContent::FlexEnd);
+        right_buttons->set_gap(16.0f);
+        right_buttons->set_as_navigation_container(NavigationType::Horizontal);
+        model_packs_button = context.create_element<Button>(right_buttons, "Model packs", recompui::ButtonStyle::Secondary);
+        model_packs_button->add_pressed_callback([](){ open_model_packs_modal(); });
+        model_packs_button->set_white_space(WhiteSpace::Nowrap);
+        model_packs_button->set_display(Display::None);
+
+        configure_button = context.create_element<Button>(right_buttons, "Configure", recompui::ButtonStyle::Secondary);
         configure_button->add_pressed_callback([this](){ configure_button_pressed(); });
     }
 }
@@ -103,6 +113,7 @@ void ModDetailsPanel::set_mod_details(const recomp::mods::ModDetails& details, c
     enable_toggle->set_checked(toggle_checked);
     enable_toggle->set_enabled(toggle_enabled);
     configure_button->set_enabled(configure_enabled);
+    model_packs_button->set_display(details.mod_id == model_packs_mod_id ? Display::Flex : Display::None);
     enable_label->set_display(toggle_label_visible ? Display::Block : Display::None);
 
     if (toggle_label_visible && (deprecation_status != recomp::mods::DeprecationStatus::Unknown)) {
