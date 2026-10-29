@@ -8,6 +8,8 @@
 #include "elements/ui_button.h"
 #include "config/ui_config_page_options_menu.h"
 #include "ui_conversions_modal.h"
+#include "ui_model_packs_modal.h"
+#include "config/mod_tabs.h"
 
 #include "librecomp/mods.hpp"
 
@@ -285,7 +287,40 @@ void ModMenu::refresh_mods(bool scan_mods) {
         recomp::mods::scan_mods();
     }
     mod_details = recomp::mods::get_all_mod_details(game_mod_id);
+    const auto kinds = recomp::mods::get_mod_kinds();
+    mod_kinds.clear();
+    for (const recomp::mods::ModDetails &details : mod_details) {
+        const auto it = kinds.find(details.mod_id);
+        mod_kinds.push_back(it != kinds.end() ? it->second : recomp::mods::ModKindInfo{});
+    }
     create_mod_list();
+}
+
+void ModMenu::set_tab(int tab) {
+    current_tab = tab;
+    for (size_t i = 0; i < tab_buttons.size(); i++) {
+        tab_buttons[i]->apply_button_style(int(i) == tab ? recompui::ButtonStyle::Primary : recompui::ButtonStyle::Tertiary);
+    }
+    apply_tab_filter();
+}
+
+void ModMenu::apply_tab_filter() {
+    using namespace recompui::config::mod_tabs;
+    const Tab tab = (current_tab == 1) ? Tab::Addons : (current_tab == 2) ? Tab::TexturePacks : Tab::All;
+    std::vector<bool> visible(mod_entry_buttons.size(), true);
+    for (size_t i = 0; i < mod_entry_buttons.size() && i < mod_kinds.size(); i++) {
+        visible[i] = shows(tab, mod_kinds[i].code, mod_kinds[i].rom_patch);
+        mod_entry_buttons[i]->set_display(visible[i] ? Display::Block : Display::None);
+        if (i < mod_entry_spacers.size()) {
+            mod_entry_spacers[i]->set_display(visible[i] ? Display::Block : Display::None);
+        }
+    }
+    if (active_mod_index < 0 || size_t(active_mod_index) >= visible.size() || !visible[active_mod_index]) {
+        const int first = first_visible(visible);
+        if (first >= 0) {
+            mod_selected(uint32_t(first));
+        }
+    }
 }
 
 void ModMenu::open_mods_folder() {
@@ -352,6 +387,9 @@ void ModMenu::mod_selected(uint32_t mod_index) {
 
 void ModMenu::mod_dragged(uint32_t mod_index, EventDrag drag) {
     constexpr float spacer_height = modEntryHeight + modEntryPadding * 2.0f;
+    if (current_tab != 0) {
+        return;   // [wcw] reordering only on All, where every mod is listed
+    }
 
     switch (drag.phase) {
     case DragPhase::Start: {
@@ -631,6 +669,7 @@ void ModMenu::create_mod_list() {
     if (mods_available) {
         mod_selected(0);
     }
+    apply_tab_filter();
 }
 
 void ModMenu::process_event(const Event &e) {
@@ -675,6 +714,27 @@ ModMenu::ModMenu(ResourceId rid, Element *parent) : Element(rid, parent) {
     set_height(100.0f, Unit::Percent);
     
     {
+        // [wcw] aki-roadmap#154: kind tabs. All / Add-ons / Texture packs filter the list; Model packs and
+        // Conversions open their dialogs.
+        tab_container = context.create_element<Container>(this, FlexDirection::Row, JustifyContent::FlexStart);
+        tab_container->set_as_navigation_container(NavigationType::Horizontal);
+        tab_container->set_width(100.0f, Unit::Percent);
+        tab_container->set_padding(12.0f);
+        tab_container->set_gap(12.0f);
+        tab_container->set_background_color(theme::color::BGShadow);
+        {
+            const char *labels[] = { "All", "Add-ons", "Texture packs" };
+            for (int i = 0; i < 3; i++) {
+                Button *b = context.create_element<Button>(tab_container, labels[i], i == 0 ? recompui::ButtonStyle::Primary : recompui::ButtonStyle::Tertiary);
+                b->add_pressed_callback([this, i](){ set_tab(i); });
+                tab_buttons.push_back(b);
+            }
+            Button *packs = context.create_element<Button>(tab_container, "Model packs", recompui::ButtonStyle::Tertiary);
+            packs->add_pressed_callback([](){ open_model_packs_modal(); });
+            Button *conversions = context.create_element<Button>(tab_container, "Conversions", recompui::ButtonStyle::Tertiary);
+            conversions->add_pressed_callback([](){ open_conversions_modal(); });
+        } // tab_container
+
         body_container = context.create_element<Container>(this, FlexDirection::Row, JustifyContent::FlexStart);
         body_container->set_as_navigation_container(NavigationType::Horizontal);
         body_container->set_flex(1.0f, 1.0f, 100.0f);
