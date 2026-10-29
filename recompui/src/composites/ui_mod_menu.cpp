@@ -315,11 +315,17 @@ void ModMenu::apply_tab_filter() {
             mod_entry_spacers[i]->set_display(visible[i] ? Display::Block : Display::None);
         }
     }
-    if (active_mod_index < 0 || size_t(active_mod_index) >= visible.size() || !visible[active_mod_index]) {
-        const int first = tabs::first_visible(visible);
-        if (first >= 0) {
-            mod_selected(uint32_t(first));
-        }
+    const int first = tabs::first_visible(visible);
+    if (first >= 0 && (active_mod_index < 0 || size_t(active_mod_index) >= visible.size() || !visible[active_mod_index])) {
+        mod_selected(uint32_t(first));
+    }
+    // A tab with nothing on it shows the empty message instead of the last mod's details.
+    const bool any = first >= 0;
+    body_container->set_display(any ? Display::Flex : Display::None);
+    body_empty_container->set_display(any ? Display::None : Display::Flex);
+    if (body_empty_label) {
+        body_empty_label->set_text(current_tab == 0 ? "You have no mods. Go get some!" :
+            current_tab == 1 ? "No add-ons installed." : "No texture packs installed.");
     }
 }
 
@@ -723,7 +729,7 @@ ModMenu::ModMenu(ResourceId rid, Element *parent) : Element(rid, parent) {
         tab_container->set_gap(12.0f);
         tab_container->set_background_color(theme::color::BGShadow);
         {
-            const char *labels[] = { "All", "Add-ons", "Texture packs" };
+            const char *labels[] = { "All", "Add-ons", "Textures" };
             for (int i = 0; i < 3; i++) {
                 Button *b = context.create_element<Button>(tab_container, labels[i], i == 0 ? recompui::ButtonStyle::Primary : recompui::ButtonStyle::Tertiary);
                 b->add_pressed_callback([this, i](){ set_tab(i); });
@@ -764,7 +770,7 @@ ModMenu::ModMenu(ResourceId rid, Element *parent) : Element(rid, parent) {
         body_empty_container->set_display(Display::None);
         {
             context.create_element<Element>(body_empty_container);
-            context.create_element<Label>(body_empty_container, "You have no mods. Go get some!", LabelStyle::Large);
+            body_empty_label = context.create_element<Label>(body_empty_container, "You have no mods. Go get some!", LabelStyle::Large);
             context.create_element<Element>(body_empty_container);
         } // body_empty_container
 
@@ -784,9 +790,7 @@ ModMenu::ModMenu(ResourceId rid, Element *parent) : Element(rid, parent) {
             install_mods_button = context.create_element<Button>(footer_container, "Install Mods", recompui::ButtonStyle::Primary);
             install_mods_button->add_pressed_callback([this](){ open_install_dialog(); });
 
-            // [wcw fullconv] Conversions (aki-roadmap#57): pick the conversion the next start runs.
-            Button *conversions_button = context.create_element<Button>(footer_container, "Conversions", recompui::ButtonStyle::Secondary);
-            conversions_button->add_pressed_callback([](){ open_conversions_modal(); });
+            // [wcw] Conversions moved to the kind tabs (aki-roadmap#154).
 
             Element* footer_spacer = context.create_element<Element>(footer_container);
             footer_spacer->set_flex(1.0f, 0.0f);

@@ -105,6 +105,7 @@ private:
     ScrollContainer *list_scroll_container = nullptr;
     ModDetailsPanel *mod_details_panel = nullptr;
     Container *body_empty_container = nullptr;
+    Label *body_empty_label = nullptr;
     Container *footer_container = nullptr;
     Button *install_mods_button = nullptr;
     IconButton *refresh_button = nullptr;
