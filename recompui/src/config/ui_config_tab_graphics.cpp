@@ -350,7 +350,7 @@ namespace recompui {
         }
 
         // [wcw] Graphics presets (graphics_presets.h). The display's refresh rate and the GPU's MSAA levels arrive once
-        // the renderer runs; until then Max assumes a fast enough display and MSAA 4x.
+        // the renderer runs; until then the presets assume MSAA 4x (no preset depends on the display rate now, #165).
         static std::atomic<uint32_t> preset_display_rate = 0;
         static std::atomic<ultramodern::renderer::Antialiasing> preset_max_msaa = ultramodern::renderer::Antialiasing::MSAA4X;
         // Set while the tab itself changes the preset or its options, so those changes aren't taken as the player's.
