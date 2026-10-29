@@ -691,7 +691,7 @@ namespace recompui {
                 "<br />"
                 "<recomp-color primary>Enhanced RT</recomp-color>: Enhanced plus ray tracing (Balanced)."
                 "<br />"
-                "<recomp-color primary>Max</recomp-color>: Ultra ray tracing, HDR, 120 fps on a fast display."
+                "<recomp-color primary>Max</recomp-color>: Ultra ray tracing, HDR, smooth motion."
                 "<br />"
                 "<recomp-color primary>Custom</recomp-color>: your own mix (shown when no preset matches)."
                 "<br />"
@@ -774,7 +774,9 @@ namespace recompui {
                 "<br />"
                 "<br />"
                 "<recomp-color warning>Note:</recomp-color> <recomp-color primary>2x</recomp-color> renders four times the pixels "
-                "and is demanding at high window sizes: about 4K internally for a 1080p window. Ray tracing still traces at the window's size.",
+                "and is demanding at high window sizes: about 4K internally for a 1080p window. Ray tracing still traces at the window's size. "
+                "At 120 fps every in-between frame is rendered at that size too: with a 4K window, expect well under 120 fps and "
+                "several GB of video memory.",
                 supersampling_options,
                 SupersamplingOption::Off
             );

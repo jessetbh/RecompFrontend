@@ -11,11 +11,6 @@ namespace recompui::config::presets {
         return std::min(msaa, limits.max_msaa);
     }
 
-    // Twice the smooth rate needs a display that fast (a 119.88 Hz display reports 119).
-    static bool display_allows_smooth2x(const Limits &limits) {
-        return (limits.display_rate == 0) || (limits.display_rate + 2 >= limits.smooth_rate * 2);
-    }
-
     std::optional<Settings> settings_for(Preset preset, const Limits &limits) {
         const bool smooth = limits.smooth_rate > 0;
         Settings settings;
@@ -39,8 +34,9 @@ namespace recompui::config::presets {
             break;
         case Preset::Max:
             settings.aspect_ratio = AspectRatio::Expand;
-            settings.framerate = !smooth ? RefreshRate::Original :
-                (display_allows_smooth2x(limits) ? RefreshRate::Display : RefreshRate::Manual);
+            // The smooth rate, never twice it (aki-roadmap#165): ray tracing at Ultra and 120 fps falls to ~7 frames
+            // a second, so Max on a 120 Hz+ display was a slideshow. 120 fps stays in the Framerate menu.
+            settings.framerate = smooth ? RefreshRate::Manual : RefreshRate::Original;
             settings.msaa = Antialiasing::MSAA4X;
             settings.rt = RayTracingOption::On;
             settings.rt_quality = RayTracingQuality::Ultra;
