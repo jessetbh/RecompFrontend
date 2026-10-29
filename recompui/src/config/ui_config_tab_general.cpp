@@ -3,6 +3,10 @@
 #include "recompui/recompui.h"
 #include "util/steam_deck.h"
 #include "composites/ui_save_backups_modal.h"
+#include "dd_metrics_rules.h"
+
+#include <cstdio>
+#include <cstdlib>
 
 namespace recompui {
 
@@ -77,6 +81,28 @@ namespace config {
         return get_general_config_bool_value(general::options::debug_mode);
     }
 
+    bool general::get_dd_metrics_enabled() {
+        return get_general_config_bool_value(general::options::dd_metrics);
+    }
+
+    void general::apply_dd_metrics_env() {
+        if (!created_general_config || !get_general_config().has_option(general::options::dd_metrics)) {
+            return;
+        }
+
+        const char *value = dd_metrics_rules::env_value_to_set(std::getenv("WCW_DD_METRICS"), get_dd_metrics_enabled());
+        if (value == nullptr) {
+            return;
+        }
+
+#if defined(_WIN32)
+        _putenv_s("WCW_DD_METRICS", value);
+#else
+        setenv("WCW_DD_METRICS", value, 1);
+#endif
+        fprintf(stderr, "[wcw dd] Datadog Metrics setting on: WCW_DD_METRICS=%s for this session\n", value);
+    }
+
     recomp::config::Config &create_general_tab(const GeneralTabOptions& options, const std::string &name) {
         created_general_config = true;
         recomp::config::Config &config = recompui::config::create_config_tab(name, general::id, false);
@@ -139,6 +165,19 @@ namespace config {
             "<b>This setting does not affect keyboard input.</b>",
             background_input_options,
             BackgroundInputMode::On
+        );
+
+        // [wcw dd] Developer option (aki-roadmap#148): read once at startup (config::finalize sets WCW_DD_METRICS).
+        config.add_bool_option(
+            general::options::dd_metrics,
+            "Datadog Metrics",
+            "Developer option. Sends performance numbers, and a last message if the game crashes, to a Datadog Agent "
+            "running on this PC (127.0.0.1), which forwards them to its Datadog account. With no Agent running, "
+            "nothing is sent anywhere."
+            "<br/>"
+            "<b>Takes effect the next time the game starts.</b> The WCW_DD_METRICS environment variable, when set, "
+            "overrides this setting.",
+            false
         );
 
         // [wcw saves] Restore a backup (aki-roadmap#50): a button that opens the backup list, not a setting.
