@@ -143,6 +143,8 @@ if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/model_pack_menu.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/conversion_menu_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/conversion_menu.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/mod_tabs_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/mod_tabs.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/dd_metrics_rules_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/dd_metrics_rules.cpp
     )
