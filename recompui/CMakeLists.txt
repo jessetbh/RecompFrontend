@@ -139,6 +139,8 @@ if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/save_backup_menu.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/radio_rules_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/elements/radio_rules.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/dd_metrics_rules_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/dd_metrics_rules.cpp
     )
     target_include_directories(recompui_wcw_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config
