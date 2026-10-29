@@ -72,7 +72,8 @@ namespace recompui {
     static void show_rows() {
         const std::string chosen = recomp::mods::chosen_conversion();
         const std::string running = recomp::mods::session_conversion_id();
-        const std::vector<menu::Row> rows = menu::rows(shown_entries, chosen, running);
+        const bool from_launcher = recomp::mods::session_conversion_from_launcher();
+        const std::vector<menu::Row> rows = menu::rows(shown_entries, chosen, running, from_launcher);
         for (RowWidgets &w : row_widgets) {
             for (const menu::Row &row : rows) {
                 if (row.entry.id != w.id) {
@@ -85,7 +86,7 @@ namespace recompui {
             }
         }
         if (status_label != nullptr) {
-            status_label->set_text(menu::status_line(shown_entries, chosen, running));
+            status_label->set_text(menu::status_line(shown_entries, chosen, running, from_launcher));
         }
     }
 
@@ -154,8 +155,10 @@ namespace recompui {
         list->set_padding(4.0f);
         list->set_as_navigation_container(NavigationType::Vertical);
 
-        const std::vector<menu::Row> rows = menu::rows(shown_entries, recomp::mods::chosen_conversion(), recomp::mods::session_conversion_id());
+        const std::vector<menu::Row> rows = menu::rows(shown_entries, recomp::mods::chosen_conversion(),
+            recomp::mods::session_conversion_id(), recomp::mods::session_conversion_from_launcher());
         Element *first = nullptr;
+        Element *off_button = nullptr;
         for (size_t i = 0; i < rows.size(); i++) {
             const menu::Row &row = rows[i];
             RowWidgets widgets;
@@ -204,13 +207,20 @@ namespace recompui {
             widgets.choose->set_enabled(row.selectable);
             const std::string id = row.entry.id;
             widgets.choose->add_pressed_callback([id]() { choose(id); });
-            if (first == nullptr && row.chosen) {
+            // Focus the current choice, unless it can't be played (its button is disabled): then Off.
+            if (first == nullptr && row.chosen && row.selectable) {
                 first = widgets.choose;
+            }
+            if (row.entry.id.empty()) {
+                off_button = widgets.choose;
             }
             row_widgets.push_back(widgets);
         }
 
         show_rows();
+        if (first == nullptr) {
+            first = off_button;
+        }
         return first != nullptr ? first : close_button;
     }
 

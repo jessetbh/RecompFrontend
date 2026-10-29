@@ -32,7 +32,8 @@ namespace recompui::config::conversion_menu {
         return id;
     }
 
-    std::vector<Row> rows(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id) {
+    std::vector<Row> rows(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id,
+        bool from_launcher) {
         std::vector<Row> out;
         Row off;
         off.entry.name = "Off";
@@ -58,18 +59,24 @@ namespace recompui::config::conversion_menu {
                 row.note = row.entry.id.empty() ? std::string() : std::string("Running now");
             }
             else if (row.running) {
-                row.note = "Running now; the next start runs " + display_name(entries, chosen_id);
+                row.note = from_launcher ? std::string("Running now (picked by AKI Launcher)") :
+                    ("Running now; the next start runs " + display_name(entries, chosen_id));
             }
             else if (row.chosen) {
-                row.note = "From the next start";
+                row.note = from_launcher ? "For starts without AKI Launcher" : "From the next start";
             }
         }
         return out;
     }
 
-    std::string status_line(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id) {
+    std::string status_line(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id,
+        bool from_launcher) {
         if (chosen_id == running_id) {
             return running_id.empty() ? "Playing the normal game." : ("Playing " + display_name(entries, running_id) + ".");
+        }
+        if (from_launcher) {
+            return "AKI Launcher started " + display_name(entries, running_id) + ". Starts without the launcher run " +
+                display_name(entries, chosen_id) + ".";
         }
         return "Restart the game to switch to " + display_name(entries, chosen_id) + ".";
     }

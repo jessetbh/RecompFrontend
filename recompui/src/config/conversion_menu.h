@@ -27,9 +27,13 @@ namespace recompui::config::conversion_menu {
         std::string note;      // shown under the name
     };
 
-    // The rows: "Off" first, then the entries in the given order. chosen_id / running_id: "" = none.
-    std::vector<Row> rows(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id);
+    // The rows: "Off" first, then the entries in the given order. chosen_id / running_id: "" = none. from_launcher: AKI
+    // Launcher picked what runs now (AKI_CONVERSION); its restarts pick it again, so the choice here only applies to
+    // starts without the launcher.
+    std::vector<Row> rows(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id,
+        bool from_launcher);
 
     // The line above the list: what changes at the next start, if anything.
-    std::string status_line(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id);
+    std::string status_line(const std::vector<Entry> &entries, const std::string &chosen_id, const std::string &running_id,
+        bool from_launcher);
 }
