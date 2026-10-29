@@ -90,8 +90,13 @@ namespace config {
             return;
         }
 
-        const char *value = dd_metrics_rules::env_value_to_set(std::getenv("WCW_DD_METRICS"), get_dd_metrics_enabled());
+        const char *env = std::getenv("WCW_DD_METRICS");
+        const bool setting_on = get_dd_metrics_enabled();
+        const char *value = dd_metrics_rules::env_value_to_set(env, setting_on);
         if (value == nullptr) {
+            if (setting_on) {
+                fprintf(stderr, "[wcw dd] Datadog Metrics setting on, but WCW_DD_METRICS=%s overrides it\n", env);
+            }
             return;
         }
 
@@ -171,9 +176,9 @@ namespace config {
         config.add_bool_option(
             general::options::dd_metrics,
             "Datadog Metrics",
-            "Developer option. Sends performance numbers, and a last message if the game crashes, to a Datadog Agent "
-            "running on this PC (127.0.0.1), which forwards them to its Datadog account. With no Agent running, "
-            "nothing is sent anywhere."
+            "Developer option. Sends performance numbers, and a last message if the game stops on a fatal error, "
+            "to a Datadog Agent running on this PC (127.0.0.1), which forwards them to its Datadog account. "
+            "With no Agent running, nothing is sent anywhere."
             "<br/>"
             "<b>Takes effect the next time the game starts.</b> The WCW_DD_METRICS environment variable, when set, "
             "overrides this setting.",

@@ -10,6 +10,7 @@ namespace recompui::dd_metrics_rules {
     // metrics on or off whatever the setting says; otherwise the setting turns them on with "1".
     const char *env_value_to_set(const char *env_value, bool setting_on);
 
-    // Whether the metrics end up on, by the rule rt64 and the runtime read the variable with: set, not empty, not "0".
+    // Whether the metrics end up on, by the rule rt64 and the runtime read the variable with: set, not empty, not "0"
+    // (rt64 WcwLogic::envSwitchOn, N64ModernRuntime recomp::dd::switch_on; keep the three the same).
     bool metrics_on(const char *env_value, bool setting_on);
 }
