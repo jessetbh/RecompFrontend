@@ -103,10 +103,10 @@ TEST_CASE("stored preset values follow the menu order") {
     CHECK_EQ(val(Preset::Custom), 4);
 }
 
-TEST_CASE("Max is 120 fps (Smooth2x), MSAA 4x, RT Ultra, HDR Auto") {
+TEST_CASE("Max is 60 fps (Smooth), MSAA 4x, RT Ultra, HDR Auto") {
     const Settings s = preset(Preset::Max);
     CHECK_EQ(val(s.aspect_ratio), val(AspectRatio::Expand));
-    CHECK_EQ(val(s.framerate), val(RefreshRate::Display));
+    CHECK_EQ(val(s.framerate), val(RefreshRate::Manual));
     CHECK_EQ(val(s.msaa), val(Antialiasing::MSAA4X));
     CHECK_EQ(val(s.crt), val(CrtFilterOption::Off));
     CHECK_EQ(val(s.rt), val(RayTracingOption::On));
@@ -115,18 +115,23 @@ TEST_CASE("Max is 120 fps (Smooth2x), MSAA 4x, RT Ultra, HDR Auto") {
     CHECK_EQ(val(s.hdr_picture), val(HdrPictureOption::Auto));
 }
 
-TEST_CASE("Max runs 120 only where the display allows it, otherwise the smooth rate") {
+TEST_CASE("Max never pairs RT Ultra with 120 fps, whatever the display (aki-roadmap#165)") {
     Limits limits = interpolating();
-    limits.display_rate = 60;
-    CHECK_EQ(val(preset(Preset::Max, limits).framerate), val(RefreshRate::Manual));
-    limits.display_rate = 100;
-    CHECK_EQ(val(preset(Preset::Max, limits).framerate), val(RefreshRate::Manual));
-    limits.display_rate = 119; // 119.88 Hz
-    CHECK_EQ(val(preset(Preset::Max, limits).framerate), val(RefreshRate::Display));
-    limits.display_rate = 120;
-    CHECK_EQ(val(preset(Preset::Max, limits).framerate), val(RefreshRate::Display));
-    limits.display_rate = 0; // not known yet
-    CHECK_EQ(val(preset(Preset::Max, limits).framerate), val(RefreshRate::Display));
+    for (uint32_t rate : { 0u, 60u, 100u, 119u, 120u, 144u, 165u, 240u }) {
+        limits.display_rate = rate;
+        const Settings s = preset(Preset::Max, limits);
+        CHECK_EQ(val(s.rt_quality), val(RayTracingQuality::Ultra));
+        CHECK_EQ(val(s.framerate), val(RefreshRate::Manual));
+    }
+}
+
+TEST_CASE("Max with 120 fps chosen by hand is Custom (aki-roadmap#165)") {
+    Limits limits = interpolating();
+    limits.display_rate = 165;
+    Settings s = preset(Preset::Max, limits);
+    CHECK_EQ(val(matching_preset(s, limits)), val(Preset::Max));
+    s.framerate = RefreshRate::Display;
+    CHECK_EQ(val(matching_preset(s, limits)), val(Preset::Custom));
 }
 
 TEST_CASE("a game with a locked framerate stays at Original in every preset") {

@@ -83,7 +83,8 @@ namespace recompui::config::presets {
     struct Limits {
         // The game's smooth rate (programconfig::get_frame_interpolation); 0 = the framerate is locked to Original.
         uint32_t smooth_rate = 0;
-        // The display's refresh rate in Hz; 0 = not known yet (taken as fast enough).
+        // The display's refresh rate in Hz; 0 = not known yet. No preset uses it since Max stopped picking 120 fps
+        // (aki-roadmap#165); kept for presets that might again.
         uint32_t display_rate = 0;
         // The highest MSAA level the GPU offers.
         ultramodern::renderer::Antialiasing max_msaa = ultramodern::renderer::Antialiasing::MSAA4X;
