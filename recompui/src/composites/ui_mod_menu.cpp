@@ -7,6 +7,7 @@
 #include "elements/ui_modal.h"
 #include "elements/ui_button.h"
 #include "config/ui_config_page_options_menu.h"
+#include "ui_conversions_modal.h"
 
 #include "librecomp/mods.hpp"
 
@@ -722,6 +723,10 @@ ModMenu::ModMenu(ResourceId rid, Element *parent) : Element(rid, parent) {
             Button* configure_button = mod_details_panel->get_configure_button();
             install_mods_button = context.create_element<Button>(footer_container, "Install Mods", recompui::ButtonStyle::Primary);
             install_mods_button->add_pressed_callback([this](){ open_install_dialog(); });
+
+            // [wcw fullconv] Conversions (aki-roadmap#57): pick the conversion the next start runs.
+            Button *conversions_button = context.create_element<Button>(footer_container, "Conversions", recompui::ButtonStyle::Secondary);
+            conversions_button->add_pressed_callback([](){ open_conversions_modal(); });
 
             Element* footer_spacer = context.create_element<Element>(footer_container);
             footer_spacer->set_flex(1.0f, 0.0f);
