@@ -20,6 +20,8 @@ namespace recompui {
                 inline const std::string background_input_mode = "background_input_mode";
 
                 inline const std::string debug_mode = "debug_mode";
+                // [wcw dd] Sends the in-game Datadog metrics (WCW_DD_METRICS, aki-roadmap#148).
+                inline const std::string dd_metrics = "dd_metrics";
             }
 
             bool has_rumble_strength_option();
@@ -31,6 +33,10 @@ namespace recompui {
             double get_joystick_deadzone();
             bool get_background_input_mode_enabled();
             bool get_debug_mode_enabled();
+            bool get_dd_metrics_enabled();
+            // [wcw dd] Sets WCW_DD_METRICS for this process from the Datadog Metrics setting, unless the variable is
+            // already set (config::finalize calls it, before rt64 starts). Does nothing without a General tab.
+            void apply_dd_metrics_env();
         }
 
         namespace controls {

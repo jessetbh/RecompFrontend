@@ -130,6 +130,9 @@ namespace recompui {
 
         recompinput::profiles::load_controls_config(recomp::get_config_path() / (config::controls::id + ".json"));
 
+        // [wcw dd] Before rt64 starts, which reads WCW_DD_METRICS once (aki-roadmap#148).
+        config::general::apply_dd_metrics_env();
+
         loaded_configs = true;
     }
 
