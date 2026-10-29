@@ -305,18 +305,18 @@ void ModMenu::set_tab(int tab) {
 }
 
 void ModMenu::apply_tab_filter() {
-    using namespace recompui::config::mod_tabs;
-    const Tab tab = (current_tab == 1) ? Tab::Addons : (current_tab == 2) ? Tab::TexturePacks : Tab::All;
+    namespace tabs = recompui::config::mod_tabs;
+    const tabs::Tab tab = (current_tab == 1) ? tabs::Tab::Addons : (current_tab == 2) ? tabs::Tab::TexturePacks : tabs::Tab::All;
     std::vector<bool> visible(mod_entry_buttons.size(), true);
     for (size_t i = 0; i < mod_entry_buttons.size() && i < mod_kinds.size(); i++) {
-        visible[i] = shows(tab, mod_kinds[i].code, mod_kinds[i].rom_patch);
+        visible[i] = tabs::shows(tab, mod_kinds[i].code, mod_kinds[i].rom_patch);
         mod_entry_buttons[i]->set_display(visible[i] ? Display::Block : Display::None);
         if (i < mod_entry_spacers.size()) {
             mod_entry_spacers[i]->set_display(visible[i] ? Display::Block : Display::None);
         }
     }
     if (active_mod_index < 0 || size_t(active_mod_index) >= visible.size() || !visible[active_mod_index]) {
-        const int first = first_visible(visible);
+        const int first = tabs::first_visible(visible);
         if (first >= 0) {
             mod_selected(uint32_t(first));
         }
