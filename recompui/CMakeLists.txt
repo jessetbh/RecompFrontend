@@ -121,6 +121,7 @@ target_link_libraries(recompui PUBLIC
     RmlUi::Debugger
     lunasvg
     miniz
+    wcw_texnames
 )
 
 # [wcw] Unit tests for the Framerate, resolution and MSAA options' rules, the graphics presets, the save backup list,
