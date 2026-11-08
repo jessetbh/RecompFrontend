@@ -83,6 +83,7 @@ protected:
     std::string_view get_type_name() override { return "ModMenu"; }
 private:
     void refresh_mods(bool scan_mods);
+    void rebuild_mod_kinds();
     void open_mods_folder();
     void open_install_dialog();
     void mod_toggled(bool enabled);

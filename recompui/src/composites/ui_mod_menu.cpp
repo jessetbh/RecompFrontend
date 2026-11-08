@@ -287,13 +287,19 @@ void ModMenu::refresh_mods(bool scan_mods) {
         recomp::mods::scan_mods();
     }
     mod_details = recomp::mods::get_all_mod_details(game_mod_id);
+    rebuild_mod_kinds();
+    create_mod_list();
+}
+
+// mod_kinds is parallel to mod_details: rebuild it whenever mod_details is re-read (a scan, or a reorder that moves
+// entries), or the Add-ons and Texture packs tabs show the wrong mods.
+void ModMenu::rebuild_mod_kinds() {
     const auto kinds = recomp::mods::get_mod_kinds();
     mod_kinds.clear();
     for (const recomp::mods::ModDetails &details : mod_details) {
         const auto it = kinds.find(details.mod_id);
         mod_kinds.push_back(it != kinds.end() ? it->second : recomp::mods::ModKindInfo{});
     }
-    create_mod_list();
 }
 
 void ModMenu::set_tab(int tab) {
@@ -487,6 +493,7 @@ void ModMenu::mod_dragged(uint32_t mod_index, EventDrag drag) {
         // Re-order the mods and update all the details on the menu.
         recomp::mods::set_mod_index(game_mod_id, mod_details[mod_index].mod_id, mod_drag_target_index);
         mod_details = recomp::mods::get_all_mod_details(game_mod_id);
+        rebuild_mod_kinds();
         for (size_t i = 0; i < mod_entry_buttons.size(); i++) {
             mod_entry_buttons[i]->set_mod_details(mod_details[i]);
             mod_entry_buttons[i]->set_mod_thumbnail(generate_thumbnail_src_for_mod(mod_details[i].mod_id));
