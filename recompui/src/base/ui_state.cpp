@@ -23,6 +23,8 @@
 #include "recompinput/profiles.h"
 
 #include "librecomp/game.hpp"
+#include "librecomp/packages.hpp"
+#include "config/mod_tabs.h"
 
 #include "base/ui_launcher.h"
 #include "composites/ui_mod_menu.h"
@@ -1041,10 +1043,38 @@ void recompui::drop_files(const std::list<std::filesystem::path> &file_list) {
     recompui::config::open();
 
     recompui::open_notification("Installing Mods", "Please Wait");
+
+    // [wcw] aki-roadmap#154: packages (aki-package.json) install through librecomp's package installer (registry,
+    // upgrades, kept edited copies, conversions); anything else goes to the mod installer as before.
+    std::list<std::filesystem::path> legacy_files;
+    std::vector<recompui::config::mod_tabs::Outcome> package_outcomes;
+    for (const std::filesystem::path &path : file_list) {
+        if (!recomp::packages::looks_like_package(path)) {
+            legacy_files.push_back(path);
+            continue;
+        }
+        const recomp::packages::InstallResult r = recomp::packages::install_package(path);
+        const std::u8string file = path.filename().u8string();
+        package_outcomes.push_back({ r.display_name.empty() ? std::string(file.begin(), file.end()) : r.display_name,
+            recomp::packages::outcome_name(r.outcome), r.message, r.kept });
+    }
+    if (!package_outcomes.empty()) {
+        std::string summary;
+        const bool failed = recompui::config::mod_tabs::summarize(package_outcomes, summary);
+        recompui::close_prompt();
+        recompui::open_info_prompt(failed ? "Some packages weren't installed" : "Packages installed", summary, "OK", {},
+            recompui::ButtonStyle::Tertiary);
+        recompui::update_mod_list(true);
+        if (legacy_files.empty()) {
+            return;
+        }
+        recompui::open_notification("Installing Mods", "Please Wait");
+    }
+
     // TODO: Needs a progress callback and a prompt for every mod that needs to be confirmed to be overwritten.
     // TODO: Run this on a background thread and use the callbacks to advance the state instead of blocking.
     ModInstaller::Result result;
-    ModInstaller::start_mod_installation(file_list, nullptr, result);
+    ModInstaller::start_mod_installation(legacy_files, nullptr, result);
 
     recompui::close_prompt();
 

@@ -13,6 +13,7 @@
 #include "common/rt64_wcw_perf.h"
 #include "render/rt64_hdr_output.h"
 #include "rt64_render_hooks.h"
+#include "wcw_texnames.h"
 #include "overloaded.h"
 
 #include "ultramodern/ultramodern.hpp"
@@ -287,6 +288,9 @@ renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::Window
 
     // [wcw hdr] The swap chain's format depends on the saved HDR setting.
     recompui::config::graphics::apply_hdr_settings();
+
+    // [wcw] Texture pack names from other renderers: rt64 only knows the interface (aki-roadmap#93).
+    RT64::setTextureNameProvider(&wcw_texnames::provider());
 
     // Create the RT64 application.
     app = std::make_unique<RT64::Application>(appCore, appConfig);

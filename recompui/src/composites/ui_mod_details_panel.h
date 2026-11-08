@@ -39,6 +39,7 @@ private:
     Toggle *enable_toggle = nullptr;
     Label *enable_label = nullptr;
     Button *configure_button = nullptr;
+    Button *model_packs_button = nullptr; // [wcw model import] only for the aki_modelimport mod
     std::function<void(bool)> mod_toggled_callback = nullptr;
     std::function<void()> mod_configure_pressed_callback = nullptr;
 
