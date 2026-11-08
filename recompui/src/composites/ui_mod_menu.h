@@ -83,6 +83,7 @@ protected:
     std::string_view get_type_name() override { return "ModMenu"; }
 private:
     void refresh_mods(bool scan_mods);
+    void rebuild_mod_kinds();
     void open_mods_folder();
     void open_install_dialog();
     void mod_toggled(bool enabled);
@@ -95,6 +96,9 @@ private:
     void mod_number_option_changed(const std::string &id, double value);
     void mod_hd_textures_enabled_changed(uint32_t value);
     void create_mod_list();
+    // [wcw] aki-roadmap#154: the kind tabs (config/mod_tabs.h). 0 All, 1 Add-ons, 2 Texture packs.
+    void set_tab(int tab);
+    void apply_tab_filter();
     void process_event(const Event &e) override;
 
     Container *body_container = nullptr;
@@ -102,6 +106,7 @@ private:
     ScrollContainer *list_scroll_container = nullptr;
     ModDetailsPanel *mod_details_panel = nullptr;
     Container *body_empty_container = nullptr;
+    Label *body_empty_label = nullptr;
     Container *footer_container = nullptr;
     Button *install_mods_button = nullptr;
     IconButton *refresh_button = nullptr;
@@ -115,6 +120,10 @@ private:
     float mod_drag_view_coordinates[2] = {};
     uint32_t mod_drag_target_index = 0;
     std::vector<recomp::mods::ModDetails> mod_details{};
+    std::vector<recomp::mods::ModKindInfo> mod_kinds{};   // parallel to mod_details
+    int current_tab = 0;
+    Container *tab_container = nullptr;
+    std::vector<Button *> tab_buttons;
     std::unordered_set<std::string> loaded_thumbnails;
     std::string game_mod_id;
     bool mods_dirty = false;

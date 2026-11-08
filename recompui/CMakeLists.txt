@@ -121,10 +121,11 @@ target_link_libraries(recompui PUBLIC
     RmlUi::Debugger
     lunasvg
     miniz
+    wcw_texnames
 )
 
-# [wcw] Unit tests for the Framerate, resolution and MSAA options' rules, the graphics presets, the save backup list and
-# radio options' states (tests/). They build and run as part of every recompui build, so a failing test fails the game's
+# [wcw] Unit tests for the Framerate, resolution and MSAA options' rules, the graphics presets, the save backup list,
+# radio options' states, the Model packs dialog's models.txt handling and the Conversions dialog's rows (tests/). They build and run as part of every recompui build, so a failing test fails the game's
 # build. RECOMPUI_WCW_TESTS=OFF skips them.
 option(RECOMPUI_WCW_TESTS "Build and run the wcw unit tests with recompui" ON)
 if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
@@ -139,6 +140,12 @@ if (RECOMPUI_WCW_TESTS AND NOT CMAKE_CROSSCOMPILING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/save_backup_menu.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/radio_rules_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/elements/radio_rules.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/model_pack_menu_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/model_pack_menu.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/conversion_menu_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/conversion_menu.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/mod_tabs_tests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config/mod_tabs.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/dd_metrics_rules_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config/dd_metrics_rules.cpp
     )
