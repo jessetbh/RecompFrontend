@@ -5,29 +5,11 @@
 #include <string>
 #include "recompinput.h"
 #include "json/json.hpp"
+#include "controls_rules.h"
 
 
 namespace recompinput {
-    struct ControllerGUID {
-        uint64_t hash;
-        std::string serial;
-        int vendor{};
-        int product{};
-        int version{};
-        int crc16{};
-    };
-
-    inline void to_json(nlohmann::json& j, const ControllerGUID& guid) {
-        j = nlohmann::json{ {"serial", guid.serial}, {"vendor", guid.vendor}, {"product", guid.product}, {"version", guid.version}, {"crc16", guid.crc16} };
-    }
-
-    inline void from_json(const nlohmann::json& j, ControllerGUID& guid) {
-        j.at("serial").get_to(guid.serial);
-        j.at("vendor").get_to(guid.vendor);
-        j.at("product").get_to(guid.product);
-        j.at("version").get_to(guid.version);
-        j.at("crc16").get_to(guid.crc16);
-    }
+    // ControllerGUID and its json conversion live in controls_rules.h (unit tested without SDL).
 
     namespace profiles {
         constexpr int controls_config_version = 3;
@@ -65,6 +47,9 @@ namespace recompinput {
 
         bool load_controls_config(const std::filesystem::path& path);
         bool save_controls_config(const std::filesystem::path& path);
+        // [wcw fix] Saves the controls when they changed since the last load or save (aki-roadmap#303). Called every UI
+        // frame; does nothing before load_controls_config or while binding_active.
+        bool save_controls_config_if_changed(const std::filesystem::path& path, bool binding_active);
     }
 }
 

@@ -874,6 +874,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
         recompui::set_cont_active(cont_interacted);
     }
 
+    // [wcw fix] Keep controls.json in step with every bind/clear/reset/new pad (aki-roadmap#303).
+    recompui::config::save_controls_if_changed();
+
     ui_state->update_primary_input(mouse_moved, non_mouse_interacted);
     ui_state->update_focus(mouse_moved, non_mouse_interacted);
 
