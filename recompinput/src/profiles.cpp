@@ -430,6 +430,10 @@ namespace recompinput {
             recompinput::apply_joystick_deadzone(cur_x, cur_y, &cur_x, &cur_y);
             check_joystick(profile_index_kb);
         }
+        else {
+            // [wcw fix] No reads while a menu is open: start the stick-as-button state fresh afterwards (#305 review).
+            recompinput::reset_analog_digital_state(player_index);
+        }
 
         *buttons_out = cur_buttons;
         *x_out = std::clamp(cur_x, -1.0f, 1.0f);

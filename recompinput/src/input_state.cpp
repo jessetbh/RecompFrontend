@@ -271,6 +271,15 @@ static bool analog_field_pressed(int controller_num, int32_t input_id) {
     return pressed;
 }
 
+void recompinput::reset_analog_digital_state(int controller_num) {
+    if (controller_num < 0 || controller_num >= (int)analog_digital_state.size()) {
+        return;
+    }
+    for (std::atomic_bool &state : analog_digital_state[controller_num]) {
+        state.store(false);
+    }
+}
+
 bool recompinput::get_input_digital(int controller_num, const InputField& field) {
     switch (field.input_type) {
     case InputType::Keyboard:
