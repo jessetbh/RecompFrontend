@@ -88,6 +88,13 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
         }
         
         ControllerGUID guid = profiles::get_guid_from_sdl_controller(controller);
+        // [wcw] Which pad this is (aki-roadmap#304/#305): two lines for one physical pad mean a duplicate device
+        // (DS4Windows, Steam Input, x360ce ...), and a changing key means the controls profile can't follow the pad.
+        if (controller != nullptr) {
+            const char* controller_name = SDL_GameControllerName(controller);
+            printf("  Name: %s, profile key: %s\n", controller_name != nullptr ? controller_name : "?",
+                profiles::get_string_from_controller_guid(guid).c_str());
+        }
         if (profiles::get_controller_by_guid(guid) < 0) {
             if (players::is_single_player_mode()) {
                 deferred_controller_profiles[guid.hash] = guid;
