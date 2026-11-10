@@ -6,13 +6,14 @@
 #include "json/json.hpp"
 
 // [wcw fix] Rules for saving and loading the controls (controls.json), kept free of SDL and UI state so they can be
-// unit tested (recompui/tests/controls_rules_tests.cpp, aki-roadmap#303; the code is in recompinput/src/controls_rules.cpp). profiles.cpp and the UI call these; a change
-// to the rules belongs here, with a test.
+// unit tested (recompui/tests/controls_rules_tests.cpp, aki-roadmap#303; the code is in
+// recompinput/src/controls_rules.cpp). profiles.cpp and the UI call these; a change to the rules belongs here, with a test.
 namespace recompinput::controls_rules {
     // The lookup hash of a controller GUID. It is never written to controls.json, so it must be rebuilt from the saved
     // fields on load: before #303 a loaded GUID kept hash 0, every saved controller collapsed onto one entry and the
-    // file's "controllers" list came back with pads linked to each other's profiles. Never 0.
-    uint64_t controller_guid_hash(int vendor, int product, int version, int crc16);
+    // file's "controllers" list came back with pads linked to each other's profiles. Includes the serial, like the profile
+    // key, so two pads of one model with different serials (DualShock 4, Switch Pro) don't share an entry. Never 0.
+    uint64_t controller_guid_hash(const std::string &serial, int vendor, int product, int version, int crc16);
 
     // Which profile a controller saved in controls.json links to on load. Every per-pad profile is keyed by its pad's
     // GUID string, so a link to a different pad's non-custom profile is the pre-#303 corruption; it falls back to the
@@ -48,6 +49,6 @@ namespace recompinput {
         j.at("version").get_to(guid.version);
         j.at("crc16").get_to(guid.crc16);
         // [wcw fix] The hash isn't saved; rebuild it (a loaded GUID used to keep hash 0, aki-roadmap#303).
-        guid.hash = controls_rules::controller_guid_hash(guid.vendor, guid.product, guid.version, guid.crc16);
+        guid.hash = controls_rules::controller_guid_hash(guid.serial, guid.vendor, guid.product, guid.version, guid.crc16);
     }
 }

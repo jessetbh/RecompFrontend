@@ -1,9 +1,16 @@
 #include "recompinput/controls_rules.h"
 
 namespace recompinput::controls_rules {
-    uint64_t controller_guid_hash(int vendor, int product, int version, int crc16) {
-        // FNV-1a over the four fields (the hash only lives in memory, so any stable function will do).
+    uint64_t controller_guid_hash(const std::string &serial, int vendor, int product, int version, int crc16) {
+        // FNV-1a over the fields (the hash only lives in memory, so any stable function will do).
         uint64_t hash = 0xcbf29ce484222325ull;
+        for (unsigned char c : serial) {
+            hash ^= c;
+            hash *= 0x100000001b3ull;
+        }
+        // Ends the serial, so "ab" + vendor 1 can't hash like "a" + bytes of another vendor.
+        hash ^= 0xFFu;
+        hash *= 0x100000001b3ull;
         auto mix = [&hash](int value) {
             const uint32_t bits = static_cast<uint32_t>(value);
             for (int i = 0; i < 4; i++) {
