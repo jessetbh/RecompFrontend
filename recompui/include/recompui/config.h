@@ -168,6 +168,8 @@ namespace recompui {
         // TODO: Explain how to hide/show options
         recomp::config::Config &create_general_tab(const GeneralTabOptions& options, const std::string &name = config::general::tab_name);
         void create_controls_tab(const std::string &name = config::controls::tab_name);
+        // [wcw fix] Writes controls.json when the mappings changed since the last save (aki-roadmap#303); the UI calls it every frame.
+        void save_controls_if_changed();
         recomp::config::Config &create_graphics_tab(const std::string &name = config::graphics::tab_name);
         recomp::config::Config &create_sound_tab(const std::string &name = config::sound::tab_name);
         void create_mods_tab(const std::string &name = config::mods::tab_name);

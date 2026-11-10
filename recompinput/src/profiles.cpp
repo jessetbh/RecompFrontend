@@ -1,10 +1,13 @@
+#include <atomic>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <iomanip>
 #include <string>
 #include "recompinput/profiles.h"
 #include "./json.h"
-#include "xxHash/xxh3.h"
+#include "recompinput/controls_rules.h"
 
 // Arrays that hold the mappings for every input for keyboard and controller respectively.
 using input_mapping = std::array<recompinput::InputField, recompinput::num_bindings_per_input>;
@@ -31,6 +34,15 @@ struct Controller {
 
 static std::vector<Controller> controllers;
 static std::unordered_map<uint64_t, int> controller_hash_index_map{};
+
+// [wcw fix] Bumped on every change that controls.json keeps (bindings, profiles, pad links); see
+// save_controls_config_if_changed (aki-roadmap#303).
+static std::atomic<uint64_t> controls_revision{0};
+static std::atomic<uint64_t> controls_saved_revision{0};
+static std::atomic<bool> controls_loaded{false};
+// [wcw fix] The UI thread now saves while the event thread may be adding a just-plugged pad's profile; guard the
+// containers that can reallocate (input_profiles, controllers) for those two paths.
+static std::recursive_mutex controls_structure_mutex;
 
 static int keyboard_sp_profile_index = -1;
 static int controller_sp_profile_index = -1;
@@ -66,8 +78,14 @@ namespace recompinput {
     }
 
     void profiles::set_input_binding(int profile_index, GameInput input, size_t binding_index, InputField value) {
+        // [wcw fix] Under the lock so a save never snapshots a profile mid-change (aki-roadmap#303 review).
+        std::lock_guard lock{ controls_structure_mutex };
         input_mapping& cur_input_mapping = input_profiles[profile_index].mappings.at(static_cast<size_t>(input));
         if (binding_index < cur_input_mapping.size()) {
+            const recompinput::InputField &old_value = cur_input_mapping[binding_index];
+            if (old_value.input_type != value.input_type || old_value.input_id != value.input_id) {
+                controls_revision++;
+            }
             cur_input_mapping[binding_index] = value;
         }
     }
@@ -124,6 +142,7 @@ namespace recompinput {
     }
 
     int profiles::add_input_profile(const std::string &key, const std::string &name, InputDevice device, bool custom) {
+        std::lock_guard lock{ controls_structure_mutex };
         auto it = input_profile_key_index_map.find(key);
         if (it != input_profile_key_index_map.end()) {
             return it->second;
@@ -137,6 +156,7 @@ namespace recompinput {
         profile.custom = custom;
         input_profiles.emplace_back(profile);
         input_profile_key_index_map.emplace(key, index);
+        controls_revision++;
 
         if (custom) {
             switch (device) {
@@ -226,9 +246,13 @@ namespace recompinput {
     }
 
     int profiles::add_controller(ControllerGUID guid, int profile_index) {
+        std::lock_guard lock{ controls_structure_mutex };
         auto it = controller_hash_index_map.find(guid.hash);
         if (it != controller_hash_index_map.end()) {
-            controllers[it->second].profile_index = profile_index;
+            if (controllers[it->second].profile_index != profile_index) {
+                controllers[it->second].profile_index = profile_index;
+                controls_revision++;
+            }
             return it->second;
         }
 
@@ -238,6 +262,7 @@ namespace recompinput {
         controller.profile_index = profile_index;
         controllers.emplace_back(controller);
         controller_hash_index_map.emplace(guid.hash, index);
+        controls_revision++;
         return index;
     }
 
@@ -285,14 +310,9 @@ namespace recompinput {
         guid.version = version;
         guid.crc16 = crc16;
 
-        // Compute the hash from the GUID.
-        XXH3_state_t state;
-        XXH3_64bits_reset(&state);
-        XXH3_64bits_update(&state, &guid.vendor, sizeof(guid.vendor));
-        XXH3_64bits_update(&state, &guid.product, sizeof(guid.product));
-        XXH3_64bits_update(&state, &guid.version, sizeof(guid.version));
-        XXH3_64bits_update(&state, &guid.crc16, sizeof(guid.crc16));
-        guid.hash = XXH3_64bits_digest(&state);
+        // Compute the hash from the GUID. [wcw fix] The same function rebuilds it for GUIDs loaded from
+        // controls.json (from_json), which used to keep hash 0 (aki-roadmap#303).
+        guid.hash = controls_rules::controller_guid_hash(guid.serial, guid.vendor, guid.product, guid.version, guid.crc16);
 
         return guid;
     }
@@ -430,6 +450,10 @@ namespace recompinput {
             recompinput::apply_joystick_deadzone(cur_x, cur_y, &cur_x, &cur_y);
             check_joystick(profile_index_kb);
         }
+        else {
+            // [wcw fix] No reads while a menu is open: start the stick-as-button state fresh afterwards (#305 review).
+            recompinput::reset_analog_digital_state(player_index);
+        }
 
         *buttons_out = cur_buttons;
         *x_out = std::clamp(cur_x, -1.0f, 1.0f);
@@ -448,6 +472,10 @@ namespace recompinput {
     }
 
     bool profiles::save_controls_config(const std::filesystem::path& path) {
+        std::lock_guard lock{ controls_structure_mutex };
+        // [wcw fix] The revision this snapshot holds: read before building it, under the same lock as every change, so a
+        // change made after the snapshot always leaves the file marked unsaved (aki-roadmap#303 review).
+        const uint64_t revision = controls_revision.load();
         int profile_count = profiles::get_input_profile_count();
         int controller_count = profiles::get_controller_count();
         json config_json{};
@@ -476,7 +504,25 @@ namespace recompinput {
             controller["profile"] = profiles::get_input_profile_key(profiles::get_controller_profile_index(i));
         }
 
-        return recompinput::save_json_with_backups(path, config_json);
+        const bool saved = recompinput::save_json_with_backups(path, config_json);
+        if (saved) {
+            controls_saved_revision = revision;
+        }
+        return saved;
+    }
+
+    bool profiles::save_controls_config_if_changed(const std::filesystem::path& path, bool binding_active) {
+        if (!controls_loaded.load() ||
+            !controls_rules::controls_need_save(controls_revision.load(), controls_saved_revision.load(), binding_active)) {
+            return false;
+        }
+        const bool saved = profiles::save_controls_config(path);
+        if (!saved) {
+            // Say so and wait for the next change instead of retrying every frame.
+            fprintf(stderr, "[wcw][input] couldn't save the controls to %s\n", path.string().c_str());
+            controls_saved_revision = controls_revision.load();
+        }
+        return saved;
     }
 
     static void assign_mapping(int profile_index, GameInput input, const std::vector<InputField>& value) {
@@ -539,7 +585,18 @@ namespace recompinput {
         return true;
     }
 
+    static bool load_controls_config_impl(const std::filesystem::path& path);
+
     bool profiles::load_controls_config(const std::filesystem::path& path) {
+        std::lock_guard lock{ controls_structure_mutex };
+        const bool loaded = load_controls_config_impl(path);
+        // [wcw fix] Whatever was loaded (or defaulted) counts as saved; only later changes are written (aki-roadmap#303).
+        controls_saved_revision = controls_revision.load();
+        controls_loaded = true;
+        return loaded;
+    }
+
+    static bool load_controls_config_impl(const std::filesystem::path& path) {
         profiles::initialize_input_bindings();
 
         json config_json{};
@@ -578,9 +635,24 @@ namespace recompinput {
                 auto guid = controller.find("guid");
                 auto profile = controller.find("profile");
                 if (guid != controller.end() && guid->is_object() && profile != controller.end() && profile->is_string()) {
-                    int profile_index = profiles::get_input_profile_by_key(*profile);
+                    // [wcw fix] Older files link pads to each other's profiles (the hash-0 bug, aki-roadmap#303);
+                    // such a pad goes back to its own profile.
+                    ControllerGUID loaded_guid{};
+                    try {
+                        loaded_guid = guid->get<ControllerGUID>();
+                    }
+                    catch (const json::exception&) {
+                        continue;
+                    }
+                    const std::string saved_key = profile->get<std::string>();
+                    const int saved_index = profiles::get_input_profile_by_key(saved_key);
+                    const std::string own_key = profiles::get_string_from_controller_guid(loaded_guid);
+                    const std::string key = controls_rules::saved_controller_profile_key(own_key, saved_key, saved_index >= 0,
+                        saved_index >= 0 && profiles::is_input_profile_custom(saved_index),
+                        profiles::get_input_profile_by_key(own_key) >= 0);
+                    const int profile_index = key.empty() ? -1 : profiles::get_input_profile_by_key(key);
                     if (profile_index >= 0) {
-                        profiles::add_controller(*guid, profile_index);
+                        profiles::add_controller(loaded_guid, profile_index);
                     }
                 }
             }

@@ -50,6 +50,10 @@ namespace recompinput {
     void take_raw_mouse_motion(float* delta_x, float* delta_y, int32_t* wheel);
     bool game_input_disabled();
     bool all_input_disabled();
+    // [wcw fix] Forgets which sticks/triggers bound to buttons were held, for one player (aki-roadmap#305): called while
+    // the game gets no input (a menu is open), so a stick resting between the release and press thresholds afterwards
+    // doesn't read as still held.
+    void reset_analog_digital_state(int controller_num);
     ControllerState &get_controller_state(SDL_JoystickID joystick_id);
     SDL_GameController *get_controller_from_joystick_id(SDL_JoystickID joystick_id);
     void add_controller_state(SDL_JoystickID joystick_id, SDL_GameController* controller);

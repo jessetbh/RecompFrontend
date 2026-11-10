@@ -2,10 +2,12 @@
 #include <mutex>
 #include <span>
 #include <atomic>
+#include <array>
 
 #include "recompinput/recompinput.h"
 #include "recompinput/input_state.h"
 #include "recompinput/input_binding.h"
+#include "recompinput/input_rules.h"
 #include "recompinput/players.h"
 #include "recompui/config.h"
 
@@ -253,6 +255,31 @@ float recompinput::get_input_analog(int controller_num, const std::span<const In
     return std::clamp(ret, 0.0f, 1.0f);
 }
 
+// [wcw fix] Last state of every axis direction bound to a button, per player, so the press/release thresholds can
+// differ (input_rules::analog_as_digital, aki-roadmap#305). Index: player, then the signed axis id + SDL_CONTROLLER_AXIS_MAX.
+static std::array<std::array<std::atomic_bool, 2 * SDL_CONTROLLER_AXIS_MAX + 1>, recompinput::max_num_players_supported> analog_digital_state{};
+
+static bool analog_field_pressed(int controller_num, int32_t input_id) {
+    const float value = controller_axis_state(controller_num, input_id, true);
+    const int slot = input_id + SDL_CONTROLLER_AXIS_MAX;
+    if (controller_num < 0 || controller_num >= (int)analog_digital_state.size() || slot < 0 || slot >= (int)analog_digital_state[0].size()) {
+        return value >= recompinput::input_rules::analog_press_threshold;
+    }
+    std::atomic_bool &state = analog_digital_state[controller_num][slot];
+    const bool pressed = recompinput::input_rules::analog_as_digital(state.load(), value);
+    state.store(pressed);
+    return pressed;
+}
+
+void recompinput::reset_analog_digital_state(int controller_num) {
+    if (controller_num < 0 || controller_num >= (int)analog_digital_state.size()) {
+        return;
+    }
+    for (std::atomic_bool &state : analog_digital_state[controller_num]) {
+        state.store(false);
+    }
+}
+
 bool recompinput::get_input_digital(int controller_num, const InputField& field) {
     switch (field.input_type) {
     case InputType::Keyboard:
@@ -269,8 +296,8 @@ bool recompinput::get_input_digital(int controller_num, const InputField& field)
     case InputType::ControllerDigital:
         return controller_button_state(controller_num, field.input_id);
     case InputType::ControllerAnalog:
-        // TODO adjustable threshold
-        return controller_axis_state(controller_num, field.input_id, true) >= recompinput::axis_digital_threshold;
+        // [wcw fix] Press at 0.5, release below 0.35 (aki-roadmap#305).
+        return analog_field_pressed(controller_num, field.input_id);
     case InputType::Mouse:
         // TODO mouse support
         return false;
