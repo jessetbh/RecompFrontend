@@ -78,6 +78,8 @@ namespace recompinput {
     }
 
     void profiles::set_input_binding(int profile_index, GameInput input, size_t binding_index, InputField value) {
+        // [wcw fix] Under the lock so a save never snapshots a profile mid-change (aki-roadmap#303 review).
+        std::lock_guard lock{ controls_structure_mutex };
         input_mapping& cur_input_mapping = input_profiles[profile_index].mappings.at(static_cast<size_t>(input));
         if (binding_index < cur_input_mapping.size()) {
             const recompinput::InputField &old_value = cur_input_mapping[binding_index];
@@ -310,7 +312,7 @@ namespace recompinput {
 
         // Compute the hash from the GUID. [wcw fix] The same function rebuilds it for GUIDs loaded from
         // controls.json (from_json), which used to keep hash 0 (aki-roadmap#303).
-        guid.hash = controls_rules::controller_guid_hash(guid.vendor, guid.product, guid.version, guid.crc16);
+        guid.hash = controls_rules::controller_guid_hash(guid.serial, guid.vendor, guid.product, guid.version, guid.crc16);
 
         return guid;
     }
@@ -467,6 +469,9 @@ namespace recompinput {
 
     bool profiles::save_controls_config(const std::filesystem::path& path) {
         std::lock_guard lock{ controls_structure_mutex };
+        // [wcw fix] The revision this snapshot holds: read before building it, under the same lock as every change, so a
+        // change made after the snapshot always leaves the file marked unsaved (aki-roadmap#303 review).
+        const uint64_t revision = controls_revision.load();
         int profile_count = profiles::get_input_profile_count();
         int controller_count = profiles::get_controller_count();
         json config_json{};
@@ -495,7 +500,6 @@ namespace recompinput {
             controller["profile"] = profiles::get_input_profile_key(profiles::get_controller_profile_index(i));
         }
 
-        const uint64_t revision = controls_revision.load();
         const bool saved = recompinput::save_json_with_backups(path, config_json);
         if (saved) {
             controls_saved_revision = revision;
